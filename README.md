@@ -1,4 +1,4 @@
-# I-Financial-Analysis-Agent
+# AI-Financial-Analysis-Agent
 
 An intelligent financial analysis system powered by a multi-agent AI. This Streamlit application uses agentic workflows to research and analyze stock market data, providing insights from recent news and company fundamentals. This project was developed for the [Course Name] at the University of San Diego.
 
