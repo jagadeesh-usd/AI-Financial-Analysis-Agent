@@ -132,7 +132,7 @@ set_identity("Your Name your.email@example.com")
 6️⃣ Launch the Application
 
 streamlit run app.py
-
+```
 
 ⸻
 
@@ -152,7 +152,7 @@ Shows real-time status updates and streams the final report word-by-word in an i
 
 ⸻
 
-👥 Team Contributions
+👥 Team Contributions (AAi-520)
 
 
 ⸻
