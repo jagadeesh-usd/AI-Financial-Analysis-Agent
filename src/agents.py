@@ -1,6 +1,7 @@
 import yfinance as yf
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import tool
+from langchain.tools import Tool
 from langchain_openai import ChatOpenAI
 from langchain.agents import AgentExecutor, create_openai_functions_agent
 import json
@@ -119,7 +120,7 @@ def get_stock_news(ticker: str) -> list[str]:
             return ["No recent news found."]
         return [
             article['content']['title'] 
-            for article in news[:5]
+            for article in news[:10]
             if 'content' in article and 'title' in article.get('content', {})
         ]
     except Exception as e:
@@ -324,25 +325,55 @@ def create_agent(llm: ChatOpenAI, tools: list, system_prompt: str):
 
 # --- Agent Definitions ---
 
+def get_news_analyst_agent(llm: ChatOpenAI):
+    """
+    Defines a specialist agent that performs a multi-step news analysis chain.
+    """
+    # This agent only needs one tool: the ability to get raw news headlines.
+    news_analyst_tools = [get_stock_news]
+    
+    # This detailed prompt IS the "Prompt Chain". It instructs the agent on the exact sequence of steps.
+    news_analyst_prompt = (
+        "You are an expert financial news analyst. Your goal is to produce a concise summary of the latest news sentiment.\n\n"
+        "Follow this exact multi-step process:\n"
+        "1. **Ingest:** First, use the `get_stock_news` tool to fetch the latest raw news headlines for the given stock ticker.\n"
+        "2. **Classify & Analyze:** Internally, classify the sentiment of each headline (Positive, Negative, Neutral) and identify the key topics being discussed (e.g., earnings, partnerships, market trends).\n"
+        "3. **Summarize:** Finally, synthesize your findings into a concise, 2-3 sentence summary that captures the overall sentiment and the most important news points.\n\n"
+        "Your final output MUST be only the summary paragraph. Do not output the list of headlines or your classification details."
+    )
+    return create_agent(llm, news_analyst_tools, news_analyst_prompt)
+
 def get_researcher_agent(llm: ChatOpenAI):
-    # 1. ADD the new tool to this list
+    # 1. CREATE the specialist agent and wrap it in a Tool
+    news_analyst_agent = get_news_analyst_agent(llm)
+    
+    def run_news_agent(ticker: str):
+        return news_analyst_agent.invoke({"input": ticker})
+    
+    news_analysis_tool = Tool(
+        name="Financial_News_Analyst",
+        # The specialist agent's invoke method becomes the tool's function
+        func=run_news_agent,
+        description="Provides a comprehensive summary of the latest news sentiment for a given stock ticker. The input should be a dictionary with a single key 'input' and the value as the ticker symbol (e.g., {'input': 'AAPL'})."
+    )
+   
     researcher_tools = [
         read_notes_from_memory, 
         get_company_info, 
-        get_price_summary, # <--- ADD THIS
-        get_stock_news, 
+        get_price_summary, 
+        news_analysis_tool, 
         get_economic_data, 
         get_latest_filings
     ]
-    
+
     # 2. UPDATE the system prompt with a new step for the agent's plan
     researcher_system_prompt = (
-        "You are an expert financial researcher. Your goal is to produce a detailed analysis paragraph.\n\n"
+        "You are an expert financial researcher and the project manager. Your goal is to produce a detailed analysis paragraph by delegating tasks to specialist agents and tools.\n\n"
         "Follow this exact sequence:\n"
         "1. **Consult Memory:** Use `read_notes_from_memory` for historical context.\n"
         "2. **Gather Company Data:** Use `get_company_info` for an overview.\n"
-        "3. **Analyze Price Action:** Use `get_price_summary` to understand recent stock performance.\n" # <--- ADD THIS
-        "4. **Review Market Sentiment:** Use `get_stock_news` for the latest headlines.\n"
+        "3. **Analyze Price Action:** Use `get_price_summary` to understand recent stock performance.\n"
+        "4. **Delegate News Analysis:** Use the `Financial_News_Analyst` tool to get a summary of market sentiment. This specialist will handle all news processing.\n"  
         "5. **Analyze Macro-Economic Context:** Use `get_economic_data` to understand the broader economic environment.\n"
         "6. **Review Company Filings:** Use `get_latest_filings` to understand the company's official financial health.\n"
         "7. **Synthesize Analysis:** Combine all gathered information into a single, detailed analysis paragraph. This paragraph MUST be your final output.\n\n"

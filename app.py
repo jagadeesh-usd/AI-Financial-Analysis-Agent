@@ -234,11 +234,9 @@ def main():
                                 intermediate_steps = value.get('research_steps', [])
                                 company_info = next((obs for act, obs in intermediate_steps if act.tool == "get_company_info"), None)
                                 price_summary = next((obs for act, obs in intermediate_steps if act.tool == "get_price_summary"), None)
-                                news_headlines = next((obs for act, obs in intermediate_steps if act.tool == "get_stock_news"), [])
-                                # New logic to extract filings data
+                                news_summary_output = next((obs for act, obs in intermediate_steps if act.tool == "Financial_News_Analyst"), None)
                                 filings_data = next((obs for act, obs in intermediate_steps if act.tool == "get_latest_filings"), [])
 
-                            
                                 if company_info:
                                     # with info_container:
                                     with st.container():
@@ -251,15 +249,11 @@ def main():
                                         st.markdown("##### 30-Day Price Summary")
                                         st.json(price_summary)
                                 
-                                if news_headlines and isinstance(news_headlines, list):
-                                    #with news_container:
+                                if news_summary_output:
                                     with st.container():
-                                        st.markdown("##### Recent News & AI Sentiment")
-                                        sentiments = analyze_news_sentiment(news_headlines, llm)
-                                        if sentiments:
-                                            st.dataframe(pd.DataFrame(sentiments), use_container_width=True)
-                                        else:
-                                            st.write("Could not generate sentiment analysis.")
+                                        st.markdown("##### News Sentiment Summary")
+                                        # The output is a dictionary, extract the 'output' key
+                                        st.info(news_summary_output.get('output', 'No summary provided.'))
                             
                                 # New logic to display filings data
                                 if filings_data and isinstance(filings_data, list):
