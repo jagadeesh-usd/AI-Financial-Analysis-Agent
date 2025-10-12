@@ -187,7 +187,8 @@ def main():
                 st.write("")  # spacer to keep layout consistent
                 stock_data = yf.Ticker(ticker_symbol).history(period=history_period)
                 if stock_data.empty:
-                    st.warning("Could not retrieve stock data.")
+                    st.warning("Could not retrieve stock data. Enter the correct ticker symbol.")
+                    st.stop()
                 else:
                     st.line_chart(stock_data['Close'], use_container_width=True)
             except Exception as e:
@@ -296,7 +297,7 @@ def main():
                 status_placeholder.success("Workflow Complete!")
 
             with final_report_placeholder.container():
-                    st.markdown("#### Final AI-Generated Report")
+                    st.markdown("#### Final Report")
                     with st.container(border=True, height=300):
                         st.text(final_analysis)
                 # st.info(f"**Learning Update:** {memory_confirmation}")
