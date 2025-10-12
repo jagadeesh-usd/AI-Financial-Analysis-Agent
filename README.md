@@ -1,4 +1,3 @@
-Here’s your full README.md rewritten in clean, professional Markdown format, ready to drop into your repo 👇
 # 📈 AI-Powered Multi-Agent Financial Analysis System
 
 This repository contains the complete source code and documentation for a **real-world financial analysis system powered by agentic AI**.  
