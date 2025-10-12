@@ -126,6 +126,31 @@ def get_stock_news(ticker: str) -> list[str]:
         return [f"An error occurred: {e}"]
 
 @tool
+def get_price_summary(ticker: str) -> dict:
+    """
+    Retrieves a summary of the stock's price movements over the last 30 days.
+    Provides the recent high, low, and percentage change.
+    """
+    try:
+        stock = yf.Ticker(ticker)
+        hist = stock.history(period="30d")
+        if hist.empty:
+            return {"error": "Could not retrieve 30-day price history."}
+
+        thirty_day_high = hist['High'].max()
+        thirty_day_low = hist['Low'].min()
+        thirty_day_close = hist['Close'][-1]
+        thirty_day_open = hist['Open'][0]
+        thirty_day_change_pct = ((thirty_day_close - thirty_day_open) / thirty_day_open) * 100
+
+        return {
+            "30-day high": f"${thirty_day_high:.2f}",
+            "30-day low": f"${thirty_day_low:.2f}",
+            "30-day change": f"{thirty_day_change_pct:.2f}%"
+        }
+    except Exception as e:
+        return {"error": f"Failed to calculate price summary: {e}"}
+@tool
 def get_economic_data(series_id: str = 'GDP') -> dict:
     """
     Fetches the latest data for a given economic series from FRED.
@@ -167,7 +192,7 @@ def clean_filing_content(text):
     return text
 
 @tool
-def get_latest_filings(ticker: str, top_n: int = 3) -> list[dict]:
+def get_latest_filings(ticker: str, top_n: int = 1) -> list[dict]:
     """
     Fetch latest 10-K / 10-Q filings for the ticker.
     Returns a list of dicts with metadata and cleaned content.
@@ -300,15 +325,27 @@ def create_agent(llm: ChatOpenAI, tools: list, system_prompt: str):
 # --- Agent Definitions ---
 
 def get_researcher_agent(llm: ChatOpenAI):
-    researcher_tools = [read_notes_from_memory, get_company_info, get_stock_news, get_economic_data, get_latest_filings]
+    # 1. ADD the new tool to this list
+    researcher_tools = [
+        read_notes_from_memory, 
+        get_company_info, 
+        get_price_summary, # <--- ADD THIS
+        get_stock_news, 
+        get_economic_data, 
+        get_latest_filings
+    ]
+    
+    # 2. UPDATE the system prompt with a new step for the agent's plan
     researcher_system_prompt = (
         "You are an expert financial researcher. Your goal is to produce a detailed analysis paragraph.\n\n"
         "Follow this exact sequence:\n"
         "1. **Consult Memory:** Use `read_notes_from_memory` for historical context.\n"
-        "2. **Gather Company Data:** Use `get_company_info` and `get_stock_news` for the latest information.\n"
-        "3. **Analyze Macro-Economic Context:** Use `get_economic_data` with a relevant series ID (e.g., 'GDP', 'UNRATE') to understand the broader economic environment.\n"
-        "4. **Review Company Filings:** Use `get_latest_filings` to understand the company's official financial health from SEC documents.\n"
-        "5. **Synthesize Analysis:** Combine all gathered information into a single, detailed analysis paragraph. This paragraph MUST be your final output.\n\n"
+        "2. **Gather Company Data:** Use `get_company_info` for an overview.\n"
+        "3. **Analyze Price Action:** Use `get_price_summary` to understand recent stock performance.\n" # <--- ADD THIS
+        "4. **Review Market Sentiment:** Use `get_stock_news` for the latest headlines.\n"
+        "5. **Analyze Macro-Economic Context:** Use `get_economic_data` to understand the broader economic environment.\n"
+        "6. **Review Company Filings:** Use `get_latest_filings` to understand the company's official financial health.\n"
+        "7. **Synthesize Analysis:** Combine all gathered information into a single, detailed analysis paragraph. This paragraph MUST be your final output.\n\n"
         "**Formatting instructions:** Ensure your final output is a well-formatted, readable paragraph with proper spacing and punctuation. Do not output markdown or any other special formatting."
     )
     return create_agent(llm, researcher_tools, researcher_system_prompt)

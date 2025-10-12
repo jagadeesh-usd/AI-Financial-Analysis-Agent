@@ -12,7 +12,6 @@ st.set_page_config(
     page_title="AI Financial Analysis Agent",
     page_icon="🤖",
     layout="wide",
-    initial_sidebar_state="expanded"
 )
 
 # --- Custom Page Styling: center + sizing for titles & headers ---
@@ -98,7 +97,7 @@ st.markdown(
 # --- App Title and Description ---
 st.title("📈 AI Financial Analysis Agent")
 st.markdown(
-    "<p class='centered-paragraph'>Welcome to an advanced financial research assistant.</p>",
+    "<p class='centered-paragraph'>Welcome to an advanced financial research assistant. Enter a stock ticker and the agent will generate a report.</p>",
     unsafe_allow_html=True,
 )
 
@@ -143,9 +142,9 @@ def display_memory(ticker: str):
                 memory = {} # Handle empty or corrupt file
         
         if ticker in memory and memory[ticker]:
-            # with st.expander(f"**{ticker}**", expanded=True):
-            for note in memory[ticker]:
-                st.info(note)
+            with st.expander(f"**Past Insights for {ticker}**"):
+                for note in memory[ticker]:
+                    st.info(note)
 
 # --- Sidebar controls ---
 with st.sidebar.form(key="controls"):
@@ -165,6 +164,7 @@ with st.sidebar.form(key="controls"):
     )
 
     run_button = st.form_submit_button("Generate analysis")
+    st.markdown("---")
     st.caption("Pro tip: use a ticker from the suggestions to avoid lookup errors.")
 
 if not run_button:
@@ -182,7 +182,7 @@ def main():
 
     with static_info_col:
         st.markdown("#### Historical Price Chart")
-        with st.container(height=500, border=True, gap="medium"):
+        with st.container():
             try:
                 st.write("")  # spacer to keep layout consistent
                 stock_data = yf.Ticker(ticker_symbol).history(period=history_period)
@@ -195,12 +195,12 @@ def main():
 
     with past_col:
         st.markdown(f"#### Past Insights")
-        with st.container(height=500, border=True, gap="medium"):
+        with st.container():
             display_memory(ticker_symbol)
 
     with agent_col:
         st.markdown(f"#### Analysis for {ticker_symbol}")
-        with st.container(height=500, border=True, gap="medium"):
+        with st.container():
             with st.spinner('🤖 AI Agentic Workflow is running...'):
                 research_placeholder = st.empty()
                 critic_placeholder = st.empty()
@@ -228,7 +228,7 @@ def main():
                         if key == "researcher":
                             research_status_placeholder.info("🕵️‍♂️ **Researcher Agent:** Executing research...")
                             
-                            with research_placeholder.expander("Research", expanded=False):
+                            with research_placeholder.expander("Research"):
                                 
                                 intermediate_steps = value.get('research_steps', [])
                                 company_info = next((obs for act, obs in intermediate_steps if act.tool == "get_company_info"), None)
@@ -297,8 +297,7 @@ def main():
 
             with final_report_placeholder.container():
                     st.markdown("#### Final AI-Generated Report")
-                    with st.container(border=True, height=300):
-                        st.text(final_analysis)
+                    st.text(final_analysis)
                 # st.info(f"**Learning Update:** {memory_confirmation}")
 
 if __name__ == "__main__":
