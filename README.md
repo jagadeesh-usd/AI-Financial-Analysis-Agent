@@ -1,114 +1,48 @@
-📈 AI-Powered Multi-Agent Financial Analysis System
-This project is a sophisticated financial analysis system built with a multi-agent AI architecture using Python, Streamlit, and the LangChain framework. The system emulates how real-world investment firms use agentic AI to reason, plan, and act on complex financial data from multiple sources.
+Here’s your full README.md rewritten in clean, professional Markdown format, ready to drop into your repo 👇
+# 📈 AI-Powered Multi-Agent Financial Analysis System
 
-The application features a lead Researcher Agent that dynamically uses a suite of tools to gather data. Its findings are then passed through a workflow where a Critic Agent evaluates the analysis and a Refiner Agent improves it, demonstrating a complete "reason-critique-improve" loop. The agent also learns from past analyses by saving key insights to a local memory.
+This repository contains the complete source code and documentation for a **real-world financial analysis system powered by agentic AI**.  
+Built with **Python**, **Streamlit**, and the **LangChain framework**, this project demonstrates how multiple specialized AI agents can collaborate to reason, plan, act, and iteratively improve complex financial research tasks.
 
-✨ Key Features
-This project successfully implements all required agentic functions and workflow patterns:
+---
 
-Agent Functions:
+## 🗂️ Table of Contents
 
-🤖 Plans: The Researcher Agent autonomously plans and executes a multi-step research strategy for any given stock ticker.
+- [Project Overview](#project-overview)
+- [Data Sources & APIs](#data-sources--apis)
+- [Project Structure](#project-structure)
+- [Business Understanding](#business-understanding)
+- [Methodology](#methodology)
+- [How to Run](#how-to-run)
+- [Key Results & Features](#key-results--features)
+- [Team Contributions](#team-contributions)
+- [AI Assistance Disclosure](#ai-assistance-disclosure)
 
-🛠️ Uses Tools Dynamically: The agent has access to a suite of tools for real-time data retrieval, including:
+---
 
-Yahoo Finance (yfinance) for stock prices and company news.
+## 🧠 Project Overview
 
-Federal Reserve Economic Data (fredapi) for macroeconomic context.
+The application features a **lead Researcher Agent** that dynamically uses a suite of tools to gather data on a given stock ticker.  
+Its findings are passed through a **LangGraph workflow** where a **Critic Agent** evaluates the analysis and a **Refiner Agent** improves it — demonstrating a complete _"reason → critique → improve"_ loop.  
 
-SEC EDGAR (edgar) for official company filings.
+The system also “learns” by saving key insights to a local memory, which it consults in future analyses to provide more **context-aware insights**.
 
-🤔 Self-Reflects: The system uses a Critic Agent to evaluate the quality of the initial analysis, providing a mechanism for self-reflection and critique.
+---
 
-🧠 Learns Across Runs: The agent saves key takeaways from each analysis to a local memory.json file, which it consults in future runs to provide more context-aware insights.
+## 🌐 Data Sources & APIs
 
-Workflow Patterns:
+The agent gathers data from multiple real-world sources for comprehensive financial insight:
 
-⛓️ Prompt Chaining: Implemented in helper functions, such as the sentiment analysis tool which classifies news headlines.
+| Source | Purpose |
+|---------|----------|
+| **Yahoo Finance (yfinance)** | Stock prices, company information, and latest news |
+| **Federal Reserve Economic Data (fredapi)** | Macroeconomic indicators (e.g., GDP, unemployment) |
+| **SEC EDGAR (edgar)** | Official company filings (10-K, 10-Q) |
 
-🔀 Routing: The entire workflow is built on LangGraph, which routes the application's state between the Researcher, Critic, and Refiner agents.
+---
 
-🔄 Evaluator-Optimizer: The Critic -> Refiner loop is a direct implementation of this pattern, where an initial analysis is generated, evaluated, and then refined based on feedback.
-
-🏛️ System Architecture
-The application is built on a modular, multi-agent architecture orchestrated by LangGraph.
-
-UI (Streamlit): The user enters a stock ticker.
-
-LangGraph Workflow: The ticker is passed to the LangGraph state machine.
-
-Researcher Agent: This agent is the first node. It plans its research and calls multiple tools (Yahoo Finance, FRED, EDGAR) to gather data and synthesize an initial analysis.
-
-Critic Agent: The analysis is routed to this agent, which evaluates it against predefined criteria (balance, clarity, objectivity).
-
-Refiner Agent: The initial analysis and the critique are routed to this agent, which rewrites and improves the final report.
-
-Memory Agent: The final, refined analysis is used to generate a key insight, which is saved to a local JSON file for future use.
-
-UI (Streamlit): The data, workflow status, and final report are displayed to the user in real-time.
-
-🛠️ Technology Stack
-Frontend: Streamlit
-
-Agent Framework: LangChain, LangGraph
-
-LLM: OpenAI GPT-4 Turbo / GPT-4o Mini
-
-Data Tools:
-
-yfinance: Stock prices & news
-
-fredapi: Economic data
-
-edgar: SEC filings
-
-Core Language: Python
-
-🚀 Setup and Installation
-Follow these steps to run the project locally.
-
-1. Clone the Repository
-
-git clone [https://github.com/YourUsername/AI-Financial-Analysis-Agent.git](https://github.com/YourUsername/AI-Financial-Analysis-Agent.git)
-cd AI-Financial-Analysis-Agent
-
-2. Create and Activate a Virtual Environment
-
-# For macOS/Linux
-python3 -m venv venv
-source venv/bin/activate
-
-# For Windows
-python -m venv venv
-.\venv\Scripts\activate
-
-3. Install Dependencies
-
-pip install -r requirements.txt
-
-4. Configure API Keys
-This project requires API keys for OpenAI and FRED.
-
-Create a secrets file at .streamlit/secrets.toml and add your keys:
-
-# .streamlit/secrets.toml
-
-OPENAI_API_KEY = "sk-..."
-FRED_API_KEY = "your_fred_api_key_here"
-
-5. Set Your EDGAR User Agent
-The SEC requires a user agent for API calls. Open src/agents.py and replace the placeholder in the get_latest_filings tool with your own information (e.g., name and email).
-
-▶️ How to Run
-Once the setup is complete, run the Streamlit application from your terminal:
-
-streamlit run app.py
-
-The application will open in your web browser. Enter a stock ticker in the sidebar and click the "Generate" button to start the analysis.
-
-📂 Project Structure
-The code is organized into a modular structure for clarity and maintainability.
-
+## 🧩 Project Structure
+bash ```
 AI-Financial-Analysis-Agent/
 │
 ├── .streamlit/
@@ -120,5 +54,127 @@ AI-Financial-Analysis-Agent/
 │
 ├── app.py                  # Main Streamlit UI and application logic
 ├── requirements.txt        # Python dependencies
-├── memory.json             # Agent's memory file (created on first run)
-└── README.md               # This file
+├── memory.json             # Agent’s persistent memory (created on first run)
+└── README.md               # Project documentation
+```
+---
+
+## 💼 Business Understanding
+
+Traditional financial analysis pipelines are often rigid and require significant manual intervention.  
+**Agentic AI** represents a paradigm shift — enabling systems that can autonomously plan research, integrate diverse data sources in real-time, and even **critique their own outputs** to improve quality.  
+
+This project demonstrates a **practical and scalable application** of this technology for investment research, capable of delivering nuanced insights faster and more efficiently.
+
+---
+
+## 🧮 Methodology
+
+### 🧩 1. Agentic Planning & Research
+The **Researcher Agent** receives a stock ticker and autonomously plans its research steps based on a predefined, sequential strategy.
+
+### 🌍 2. Multi-Source Data Gathering
+The agent dynamically uses its suite of tools to fetch:
+- Real-time stock data and news (Yahoo Finance)
+- Macroeconomic data (FRED)
+- Official filings (SEC EDGAR)
+
+### 🧠 3. Self-Critique & Refinement
+The **Critic Agent** evaluates the initial report for balance, clarity, and completeness.  
+The **Refiner Agent** then rewrites the report based on feedback to produce an improved final version.
+
+### 💾 4. Agentic Memory & Learning
+The final step saves a **key one-sentence insight** to a persistent `memory.json` file.  
+This allows the agent to _“remember”_ past analyses and provide richer context on subsequent runs.
+
+---
+
+## ⚙️ How to Run
+
+Follow these steps to set up and run the project locally:
+
+### 1️⃣ Clone the Repository
+
+```bash
+git clone https://github.com/jagadeesh-usd/AI-Financial-Analysis-Agent.git
+cd AI-Financial-Analysis-Agent
+
+2️⃣ Create and Activate a Virtual Environment
+
+macOS / Linux
+
+python3 -m venv venv
+source venv/bin/activate
+
+Windows
+
+python -m venv venv
+.\venv\Scripts\activate
+
+3️⃣ Install Dependencies
+
+pip install -r requirements.txt
+
+4️⃣ Configure API Keys
+
+Create a .streamlit/secrets.toml file and add your keys:
+
+# .streamlit/secrets.toml
+OPENAI_API_KEY = "sk-..."
+FRED_API_KEY = "your_fred_api_key_here"
+
+5️⃣ Set Your EDGAR User Agent
+
+The SEC requires a descriptive user agent for API calls.
+Edit src/agents.py and update the set_identity call:
+
+set_identity("Your Name your.email@example.com")
+
+6️⃣ Launch the Application
+
+streamlit run app.py
+
+
+⸻
+
+🚀 Key Results & Features
+
+✅ Fully Autonomous Agent
+Plans and executes complex financial research tasks from a single stock ticker input.
+
+✅ Multi-Agent Workflow
+Implements a Researcher → Critic → Refiner pipeline using LangGraph for state management and self-improvement.
+
+✅ Persistent Memory
+Stores one-line insights for each stock and reuses them for contextual continuity.
+
+✅ Interactive Streamlit UI
+Shows real-time status updates and streams the final report word-by-word in an intuitive interface.
+
+⸻
+
+👥 Team Contributions
+
+
+⸻
+
+🤖 AI Assistance Disclosure
+
+This project follows academic integrity and responsible AI usage principles.
+AI tools, such as ChatGPT and GitHub Copilot, were utilized for:
+	•	✨ Code formatting and refactoring (PEP8 compliance)
+	•	🧾 Commenting and documentation (including this README)
+	•	🪲 Debugging guidance and optimization suggestions
+
+All AI-generated content was reviewed, validated, and refined by the team to ensure full understanding and technical accuracy.
+
+⸻
+
+📚 License
+
+This project is distributed for educational and research purposes.
+Please include proper attribution if reusing or extending this work.
+
+⸻
+
+Created with ❤️ using Python, Streamlit, and LangChain
