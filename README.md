@@ -42,7 +42,7 @@ The agent gathers data from multiple real-world sources for comprehensive financ
 ---
 
 ## 🧩 Project Structure
-bash ```
+```bash
 AI-Financial-Analysis-Agent/
 │
 ├── .streamlit/
