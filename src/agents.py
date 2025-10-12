@@ -7,7 +7,11 @@ import json
 import os
 import streamlit as st
 from fredapi import Fred
-from edgar import Company, set_identity # Updated import for SEC filings
+from edgar import Company, set_identity
+import requests
+import re
+from bs4 import BeautifulSoup
+
 
 # --- API KEY NOTE ---
 # The FRED API requires a free API key.
@@ -25,6 +29,27 @@ except Exception:
 # --- Memory Component ---
 MEMORY_FILE = "memory.json"
 
+def clean_filing_content(text):
+    """
+    Clean the extracted filing content by removing XBRL/inline tags and normalizing whitespace.
+    """
+    # Remove all XBRL/inline tags (e.g., xbrli:shares, iso4217:USD, us-gaap:*, etc.)
+    text = re.sub(r'\b(xbrli|us-gaap|dei|srt|aapl|intc):[^\s>]+', '', text)
+
+    # Remove standalone tags like "P1Y", "c-1", "f-46", etc.
+    text = re.sub(r'\b([A-Za-z]+-[0-9]+|[A-Za-z]+[0-9]+|[A-Z]{2,}[A-Za-z]*\d*)\b', '', text)
+
+    # Remove dates in the format "YYYY-MM-DD" if they are standalone
+    text = re.sub(r'(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)', '', text)
+
+    # Remove numbers like "0000050863" if they are standalone
+    text = re.sub(r'(?<!\d)\d{8,}(?!\d)', '', text)
+
+    # Remove extra whitespace and newlines
+    text = re.sub(r'\s+', ' ', text).strip()
+
+    return text
+    
 @tool
 def read_notes_from_memory(ticker: str) -> list[str]:
     """
@@ -120,37 +145,147 @@ def get_economic_data(series_id: str = 'GDP') -> dict:
     except Exception as e:
         return {"error": f"Failed to fetch data for series {series_id}: {e}"}
 
-@tool
-def get_latest_filings(ticker: str) -> list[dict]:
+def clean_filing_content(text):
     """
-    Fetches the latest SEC filings (10-K, 10-Q) for a given stock ticker using the edgar library.
+    Clean the extracted filing content by removing XBRL/inline tags and normalizing whitespace.
+    """
+    # Remove all XBRL/inline tags (e.g., xbrli:shares, iso4217:USD, us-gaap:*, etc.)
+    text = re.sub(r'\b(xbrli|us-gaap|dei|srt|aapl|intc):[^\s>]+', '', text)
+
+    # Remove standalone tags like "P1Y", "c-1", "f-46", etc.
+    text = re.sub(r'\b([A-Za-z]+-[0-9]+|[A-Za-z]+[0-9]+|[A-Z]{2,}[A-Za-z]*\d*)\b', '', text)
+
+    # Remove dates in the format "YYYY-MM-DD" if they are standalone
+    text = re.sub(r'(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)', '', text)
+
+    # Remove numbers like "0000050863" if they are standalone
+    text = re.sub(r'(?<!\d)\d{8,}(?!\d)', '', text)
+
+    # Remove extra whitespace and newlines
+    text = re.sub(r'\s+', ' ', text).strip()
+
+    return text
+
+@tool
+def get_latest_filings(ticker: str, top_n: int = 3) -> list[dict]:
+    """
+    Fetch latest 10-K / 10-Q filings for the ticker.
+    Returns a list of dicts with metadata and cleaned content.
     """
     try:
-        # Step 1: Identify yourself to SEC (required).
+        # Identify to SEC
         set_identity("jagadeesch1981@gmail.com")
-
-        # Step 2: Create a company object and get filings
         company = Company(ticker.upper())
         filings = company.get_filings().filter(form=["10-K", "10-Q"])
-
-        # Step 3: Iterate and convert each filing to a standard Python dictionary
+        filings_df = filings.to_pandas()
         results = []
-        for filing in filings[:3]:  # Top 3 filings
-            filing_data = filing.obj()
-            
+        for _, filing_row in filings_df.head(top_n).iterrows():
+            filing_dict = filing_row.to_dict()
+            # Prefer the filing's cik; fallback to company.cik if not present
+            cik_raw = filing_row.get("cik") or getattr(company, "cik", None) or filing_row.get("company_info", {}).get("cik")
+            if not cik_raw:
+                results.append({"error": "No CIK available for this filing.", "filing_meta": filing_dict})
+                continue
+            cik = str(cik_raw).replace('-', '').zfill(10)  # zero-pad to 10 digits
+            accession = str(filing_row.get("accession_number") or filing_row.get("accessionNo") or "").replace('-', '')
+            primary_document = filing_row.get("primaryDocument") or filing_row.get("primary_doc") or ""
+            # Construct canonical document URL
+            document_url = None
+            if accession and primary_document:
+                document_url = f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession}/{primary_document}"
+            # Fallback URLs
+            fallback_urls = []
+            if filing_row.get("filing_href"):
+                fallback_urls.append(filing_row.get("filing_href"))
+            if filing_row.get("linkToFilingDetails"):
+                fallback_urls.append(filing_row.get("linkToFilingDetails"))
+            if filing_row.get("filing_url"):
+                fallback_urls.append(filing_row.get("filing_url"))
+            # Try primary constructed URL first, then fallbacks
+            tried_urls = []
+            headers = {"User-Agent": "jagadeesch1981@gmail.com"}
+            response_text = None
+            for url in ([document_url] if document_url else []) + fallback_urls:
+                if not url:
+                    continue
+                tried_urls.append(url)
+                try:
+                    resp = requests.get(url, headers=headers, timeout=15)
+                    resp.raise_for_status()
+                    response_text = resp.text
+                    used_url = url
+                    break
+                except requests.exceptions.HTTPError:
+                    continue
+                except requests.exceptions.RequestException as e:
+                    results.append({
+                        "error": f"Network error fetching filing: {e}",
+                        "filing_meta": filing_dict,
+                        "tried_urls": tried_urls
+                    })
+                    response_text = None
+                    break
+            if not response_text:
+                results.append({
+                    "error": f"Could not fetch filing document (404 or unavailable).",
+                    "filing_meta": filing_dict,
+                    "tried_urls": tried_urls
+                })
+                continue
+            # Clean the text
+            soup = BeautifulSoup(response_text, 'html.parser')
+            # Remove all XBRL and XML tags
+            for tag in soup.find_all(True, {"name": True}):
+                tag.decompose()
+            for tag in soup.find_all(True, {"xlink": True}):
+                tag.decompose()
+            for tag in soup.find_all(True, {"xbrli": True}):
+                tag.decompose()
+            for tag in soup.find_all(True, {"us-gaap": True}):
+                tag.decompose()
+            for tag in soup.find_all(True, {"dei": True}):
+                tag.decompose()
+            for tag in soup.find_all(True, {"srt": True}):
+                tag.decompose()
+            for tag in soup.find_all(True, {"aapl": True}):
+                tag.decompose()
+            for tag in soup.find_all(True, {"intc": True}):
+                tag.decompose()
+            for tag in soup.find_all(True, {"ixt": True}):
+                tag.decompose()
+            for tag in soup.find_all(True, {"ixt-sec": True}):
+                tag.decompose()
+            for tag in soup.find_all(True, {"xbrldi": True}):
+                tag.decompose()
+            for tag in soup.find_all(True, {"xsi": True}):
+                tag.decompose()
+            for tag in soup.find_all(True, {"iso4217": True}):
+                tag.decompose()
+            for tag in soup.find_all(True, {"ecd": True}):
+                tag.decompose()
+            for tag in soup.find_all(True, {"xml": True}):
+                tag.decompose()
+            # Remove all <head> tags
+            if soup.head:
+                soup.head.decompose()
+            # Get the cleaned text
+            cleaned_text = soup.get_text(separator=' ', strip=True)
+            # Further clean the text using regex
+            cleaned_text = clean_filing_content(cleaned_text)
             results.append({
-                "form_type": filing_data.get("form"),
-                "filed_at": filing_data.get("filingDate"),
-                "accession_number": str(filing_data.get("accessionNumber", "")).replace("-", ""),
-                "url": filing.url
+                "form_type": filing_dict.get("form"),
+                "filed_at": str(filing_dict.get("filing_date") or filing_dict.get("filingDate")),
+                "accession_number": accession,
+                "url": used_url,
+                "content": cleaned_text,
+                "meta": filing_dict
             })
-
         if not results:
             return [{"error": f"No recent 10-K or 10-Q filings found for {ticker}."}]
-
         return results
     except Exception as e:
         return [{"error": f"Failed to fetch SEC filings for ticker {ticker}: {e}"}]
+    
 
 # --- Agent Creation Factory ---
 def create_agent(llm: ChatOpenAI, tools: list, system_prompt: str):
