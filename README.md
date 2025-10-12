@@ -134,7 +134,7 @@ set_identity("Your Name your.email@example.com")
 streamlit run app.py
 ```
 
-⸻
+---
 
 🚀 Key Results & Features
 
@@ -150,12 +150,12 @@ Stores one-line insights for each stock and reuses them for contextual continuit
 ✅ Interactive Streamlit UI
 Shows real-time status updates and streams the final report word-by-word in an intuitive interface.
 
-⸻
+---
 
 👥 Team Contributions (AAi-520)
 
 
-⸻
+---
 
 🤖 AI Assistance Disclosure
 
@@ -167,13 +167,9 @@ AI tools, such as ChatGPT and GitHub Copilot, were utilized for:
 
 All AI-generated content was reviewed, validated, and refined by the team to ensure full understanding and technical accuracy.
 
-⸻
+---
 
 📚 License
 
 This project is distributed for educational and research purposes.
 Please include proper attribution if reusing or extending this work.
-
-⸻
-
-Created with ❤️ using Python, Streamlit, and LangChain
