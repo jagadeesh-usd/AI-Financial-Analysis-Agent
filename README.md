@@ -92,9 +92,9 @@ This allows the agent to _“remember”_ past analyses and provide richer conte
 
 Follow these steps to set up and run the project locally:
 
-### 1️⃣ Clone the Repository
-
 ```bash
+1️⃣ Clone the Repository
+
 git clone https://github.com/jagadeesh-usd/AI-Financial-Analysis-Agent.git
 cd AI-Financial-Analysis-Agent
 
