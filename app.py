@@ -111,27 +111,6 @@ except Exception:
     st.stop()
 
 # --- Helper Functions ---
-def analyze_news_sentiment(news_headlines: list, llm: ChatOpenAI):
-    """Uses an LLM to classify news headlines as Positive, Negative, or Neutral."""
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are an expert sentiment analysis AI. Classify financial news headlines."),
-        ("human", """
-        Please classify the sentiment of each headline below as 'Positive', 'Negative', or 'Neutral'.
-        Return the result as a JSON object with a single key "sentiments", which is a list of objects.
-        Each object should have 'headline' and 'sentiment' keys.
-
-        Headlines:
-        {headlines}
-        """)
-    ])
-    sentiment_chain = prompt | llm
-    try:
-        response_content = sentiment_chain.invoke({"headlines": json.dumps(news_headlines, indent=2)}).content
-        cleaned_response = response_content.strip().replace("```json", "").replace("```", "")
-        return json.loads(cleaned_response).get("sentiments", [])
-    except (json.JSONDecodeError, AttributeError):
-        return []
-
 def display_memory(ticker: str):
     """Reads and displays the agent's memory for a given ticker."""
     MEMORY_FILE = "memory.json"
@@ -149,7 +128,7 @@ def display_memory(ticker: str):
 
 # --- Sidebar controls ---
 with st.sidebar.form(key="controls"):
-    st.title("AI Financial Analysis")
+    st.header("AI Financial Analysis")
     ticker_symbol = st.text_input(
         "Ticker symbol",
         value="NVDA",
@@ -181,8 +160,21 @@ def main():
     static_info_col, agent_col, past_col = st.columns([0.5, 1, 0.5])
 
     with static_info_col:
+        # --- Company Information section ---
+        st.markdown("#### Company Information")
+        with st.container(height=120, border=True):
+            try:
+                company_info = yf.Ticker(ticker_symbol).info
+                st.write(f"**Name:** {company_info.get('longName', 'N/A')}")
+                st.write(f"**Sector:** {company_info.get('sector', 'N/A')}")
+                st.write(f"**Industry:** {company_info.get('industry', 'N/A')}")
+                st.write(f"**Website:** {company_info.get('website', 'N/A')}")
+            except Exception as e:
+                st.error(f"Error fetching company info: {e}")
+
+        # --- Historical Price Chart section ---
         st.markdown("#### Historical Price Chart")
-        with st.container(height=500, border=True, gap="medium"):
+        with st.container(height=400, border=True, gap="medium"):
             try:
                 st.write("")  # spacer to keep layout consistent
                 stock_data = yf.Ticker(ticker_symbol).history(period=history_period)
@@ -196,33 +188,32 @@ def main():
 
     with past_col:
         st.markdown(f"#### Past Insights")
-        with st.container(height=500, border=True, gap="medium"):
+        with st.container(height=600, border=True, gap="medium"):
             display_memory(ticker_symbol)
 
     with agent_col:
         st.markdown(f"#### Analysis for {ticker_symbol}")
-        with st.container(height=500, border=True, gap="medium"):
-            with st.spinner('🤖 AI Agentic Workflow is running...'):
+        with st.container(height=600, border=True, gap="medium"):
+            with st.spinner('🤖 Agent is working on your request...', show_time=True):
                 research_placeholder = st.empty()
                 critic_placeholder = st.empty()
                 final_report_placeholder = st.empty()
                 
-                st.sidebar.write('Agent Workflow Status:')
-                status_placeholder = st.sidebar.empty()
+                st.sidebar.subheader('Agent Status')
 
-                status_placeholder.info("Workflow started!")
-                
+                with st.sidebar.container(border=True):
+                    status_placeholder = st.empty()
+                    status_placeholder.info("Workflow started!")
+                    research_status_placeholder = st.empty()
+                    critic_status_placeholder = st.empty()
+                    refine_status_placeholder = st.empty()
+                    memory_status_placeholder = st.empty()
+
                 agent_workflow = build_agentic_workflow()
                 inputs = {"ticker": ticker_symbol}
                 
                 final_analysis = "Analysis could not be generated."
                 memory_confirmation = "Key insights will be saved upon completion."
-                
-                
-                research_status_placeholder = st.sidebar.empty()
-                critic_status_placeholder = st.sidebar.empty()
-                refine_status_placeholder = st.sidebar.empty()
-                memory_status_placeholder = st.sidebar.empty()
 
                 for event in agent_workflow.stream(inputs):
                     for key, value in event.items():
@@ -264,8 +255,7 @@ def main():
 
                                 if "initial_analysis" in value:
                                     st.markdown("##### Initial Analysis")
-                                    st.text(value["initial_analysis"])
-                                
+                                    st.text(value["initial_analysis"])                                     
 
                         elif key == "critic":
                             research_status_placeholder.success("🕵️‍♂️ **Researcher Agent:** Research complete.")
@@ -292,7 +282,7 @@ def main():
 
             with final_report_placeholder.container():
                     st.markdown("#### Final Report")
-                    with st.container(border=True, height=300):
+                    with st.container(border=True, height=400):
                         st.text(final_analysis)
                 # st.info(f"**Learning Update:** {memory_confirmation}")
 

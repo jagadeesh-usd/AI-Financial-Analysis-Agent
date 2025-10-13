@@ -1,18 +1,18 @@
 {
     "NVDA": [
-        "NVIDIA Corporation has achieved remarkable revenue growth of 114% in fiscal year 2025, driven by its leadership in AI and cloud computing, but faces significant challenges from regulatory scrutiny and geopolitical tensions that could impact its future performance.",
-        "NVIDIA Corporation has achieved remarkable revenue growth driven by its AI and cloud computing leadership, but faces mixed market sentiment due to rising competition, regulatory challenges, and geopolitical risks that could impact its future performance.",
-        "NVIDIA Corporation has achieved remarkable revenue growth of 114% in fiscal year 2025, driven by its leadership in AI and cloud computing, but faces challenges from regulatory scrutiny and competition that could impact its future growth trajectory."
+        "NVIDIA Corporation has achieved remarkable revenue growth of 114% in fiscal year 2025, driven by its leadership in AI and cloud computing, but faces challenges from regulatory scrutiny and competition that could impact its future growth trajectory.",
+        "NVIDIA Corporation has achieved impressive revenue growth driven by its AI and cloud computing leadership, but faces challenges from regulatory scrutiny, geopolitical tensions, and market sustainability concerns despite its strong financial health and positive outlook.",
+        "NVIDIA Corporation is experiencing robust growth driven by demand in AI and cloud computing, with a 56% revenue increase in Q2 FY2026, but faces potential risks from competition, regulatory scrutiny, and geopolitical challenges."
     ],
     "INTC": [
-        "Despite a 46.89% surge in stock price driven by AI demand, Intel faces significant financial challenges, including a $3.02 billion net loss, necessitating careful evaluation of its upcoming Q3 earnings and strategic initiatives amid intense competition and market uncertainties.",
-        "Intel Corporation's stock has surged 46.89% in the past month due to AI advancements and semiconductor demand, but the company faces significant financial challenges, including a $3.02 billion net loss and competitive pressures, necessitating careful monitoring of its strategic recovery efforts.",
-        "Intel Corporation's recent 46.89% stock surge, driven by AI advancements and semiconductor demand, is tempered by a significant net loss, intense competition, and geopolitical risks, making its upcoming Q3 earnings report crucial for assessing its recovery potential."
+        "Despite a 46.89% stock price surge driven by AI demand, Intel faces significant financial challenges, including a $3.02 billion net loss and ongoing restructuring efforts, raising concerns about its long-term stability and operational sustainability.",
+        "Despite a 46.89% stock increase driven by AI advancements, Intel faces significant financial challenges, including a $3.02 billion net loss, raising concerns about its long-term viability amidst a volatile semiconductor market.",
+        "Intel Corporation's stock has surged 46.89% due to AI advancements and semiconductor demand, but a $3.02 billion net loss and significant market volatility raise concerns about its long-term sustainability amidst competitive pressures and macroeconomic challenges."
     ],
     "AAPL": [
-        "Apple Inc. remains a strong contender in the technology sector with a market cap of $3.64 trillion and a stable price target of $220, but investors should remain cautious of potential risks and economic fluctuations affecting demand.",
         "Apple Inc. demonstrates strong financial performance and growth potential despite facing legal challenges and macroeconomic pressures, with a reaffirmed price target of $220 reflecting confidence in its market resilience.",
-        "Apple Inc. (AAPL) demonstrates strong financial health and a stable upward stock trend, supported by a robust market position and innovative product pipeline, despite facing legal and economic challenges."
+        "Apple Inc. (AAPL) demonstrates strong financial health and a stable upward stock trend, supported by a robust market position and innovative product pipeline, despite facing legal and economic challenges.",
+        "Apple Inc. (AAPL) maintains a strong market position with a $3.64 trillion valuation and positive stock growth, driven by robust sales and innovation, though investors should remain cautious of macroeconomic risks."
     ],
     "INTB": [
         "The limited information and lack of key financial metrics for stock ticker INTB suggest that investors may want to explore alternative opportunities with more accessible data for informed decision-making."
@@ -33,9 +33,9 @@
         "Tesla, Inc. demonstrates strong growth potential with a market cap of $1.37 trillion and a recent stock surge, but must navigate significant challenges such as tariff impacts and declining revenues to sustain its momentum in the competitive EV market."
     ],
     "LMND": [
-        "Lemonade, Inc. faces significant challenges due to stock price volatility and strategic changes, but potential growth opportunities exist amid a stable labor market and ongoing efforts to strengthen its brand.",
         "Lemonade, Inc. is navigating significant challenges marked by stock price volatility and strategic transitions, but its proactive brand initiatives and a stable economic environment may offer potential growth opportunities despite ongoing risks.",
-        "Lemonade, Inc. is experiencing significant stock price volatility and ongoing financial losses despite growth in net earned premiums, prompting a cautious outlook for investors amid external economic challenges and strategic transitions."
+        "Lemonade, Inc. is experiencing significant stock price volatility and ongoing financial losses despite growth in net earned premiums, prompting a cautious outlook for investors amid external economic challenges and strategic transitions.",
+        "Lemonade, Inc. is experiencing significant stock volatility and a net loss despite growth in customer base and premiums, with its future outlook hinging on effective management of escalating claims costs and strategic investments in marketing and technology."
     ],
     "QNRX": [
         "Quoin Pharmaceuticals, Ltd. is experiencing stock volatility despite recent FDA clearance for a pivotal study and a significant capital raise, highlighting the need for cautious observation due to potential risks and limited financial disclosures."
@@ -62,5 +62,14 @@
         "NIO Inc. presents a mixed investment opportunity with a market cap of $18.3 billion and recent stock volatility, as potential growth is tempered by concerns over financial transparency and external political risks.",
         "NIO Inc. presents a mixed investment opportunity with its recent stock growth and innovative technology, but potential investors should be cautious of geopolitical risks and the lack of financial transparency amid varied analyst sentiments.",
         "NIO Inc. has shown a recent stock price increase amid mixed investor sentiment and concerns over transparency, but its growth initiatives in electric vehicles and battery technology may offer potential for future success despite ongoing geopolitical risks."
+    ],
+    "NAOV": [
+        "Despite recent positive developments in product trials and a reduction in loss per share, NanoVibronix, Inc. faces significant operational challenges and market volatility that could impact its future performance.",
+        "Despite recent advancements and a slight improvement in financial metrics, NanoVibronix, Inc. faces substantial operational challenges and liquidity issues that could jeopardize its future performance and stock stability."
+    ],
+    "SNOW": [
+        "Snowflake Inc. is well-positioned for growth in the cloud data solutions market with a strong customer base and a solid revenue pipeline, but it faces significant profitability challenges and market risks that could impact its future performance.",
+        "Snowflake Inc. demonstrates strong revenue growth of 32% year-over-year, reaching $1.1 billion, but faces significant profitability challenges with a net loss of $298 million and risks from the macroeconomic environment and AI sector volatility.",
+        "Snowflake Inc. is experiencing strong revenue growth amid profitability challenges and market volatility, with a strategic focus on AI expansion and infrastructure investments to drive future success."
     ]
 }
