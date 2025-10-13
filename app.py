@@ -127,8 +127,8 @@ def display_memory(ticker: str):
                 st.info(note)
 
 # --- Sidebar controls ---
+st.sidebar.header("AI Financial Analysis")
 with st.sidebar.form(key="controls"):
-    st.header("AI Financial Analysis")
     ticker_symbol = st.text_input(
         "Ticker symbol",
         value="NVDA",
