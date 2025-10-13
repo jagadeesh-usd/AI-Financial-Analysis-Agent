@@ -10,7 +10,7 @@ from src.chain import build_agentic_workflow
 # --- Page Configuration ---
 st.set_page_config(
     page_title="AI Financial Analysis Agent",
-    page_icon="🤖",
+    page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -102,14 +102,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# --- OpenAI Client Initialization ---
-try:
-    # Ensure the model is robust enough for agentic work
-    llm = ChatOpenAI(model="gpt-4o-mini", api_key=st.secrets["OPENAI_API_KEY"], temperature=0)
-except Exception:
-    st.error("OpenAI API key not found. Please add it to your Streamlit secrets.", icon="🚨")
-    st.stop()
-
 # --- Helper Functions ---
 def display_memory(ticker: str):
     """Reads and displays the agent's memory for a given ticker."""
@@ -182,7 +174,7 @@ def main():
                     st.warning("Could not retrieve stock data. Enter the correct ticker symbol.")
                     st.stop()
                 else:
-                    st.line_chart(stock_data['Close'], use_container_width=True)
+                    st.line_chart(stock_data['Close'])
             except Exception as e:
                 st.error(f"Error fetching stock data: {e}")
 
@@ -204,10 +196,12 @@ def main():
                 with st.sidebar.container(border=True):
                     status_placeholder = st.empty()
                     status_placeholder.info("Workflow started!")
+                    st.latex(r'''\cdots''')
                     research_status_placeholder = st.empty()
                     critic_status_placeholder = st.empty()
                     refine_status_placeholder = st.empty()
                     memory_status_placeholder = st.empty()
+                    st.latex(r'''\cdots''')
 
                 agent_workflow = build_agentic_workflow()
                 inputs = {"ticker": ticker_symbol}
@@ -251,7 +245,7 @@ def main():
                                     # with filings_container:
                                     with st.container():
                                         st.markdown("##### Latest SEC Filings (10-K & 10-Q)")
-                                        st.dataframe(pd.DataFrame(filings_data), use_container_width=True)
+                                        st.dataframe(pd.DataFrame(filings_data))
 
                                 if "initial_analysis" in value:
                                     st.markdown("##### Initial Analysis")

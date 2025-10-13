@@ -10,3 +10,4 @@ langchain_community
 fredapi
 sec-edgar-api
 edgartools
+pytrends

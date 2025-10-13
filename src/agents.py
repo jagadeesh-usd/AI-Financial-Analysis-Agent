@@ -12,6 +12,8 @@ from edgar import Company, set_identity
 import requests
 import re
 from bs4 import BeautifulSoup
+from datetime import datetime
+from pytrends.request import TrendReq
 
 
 # --- API KEY NOTE ---
@@ -88,7 +90,8 @@ def save_note_to_memory(ticker: str, note: str) -> str:
     if ticker not in data:
         data[ticker] = []
     
-    data[ticker].append(note.strip())
+    note_with_date = f"[**{datetime.now().strftime('%Y-%m-%d')}**] - {note.strip()}"
+    data[ticker].append(note_with_date)
     data[ticker] = data[ticker][-3:]
 
     with open(MEMORY_FILE, 'w') as f:
@@ -151,6 +154,90 @@ def get_price_summary(ticker: str) -> dict:
         }
     except Exception as e:
         return {"error": f"Failed to calculate price summary: {e}"}
+
+@tool
+def get_financial_ratios(ticker: str) -> dict:
+    """
+    Calculates and returns key financial ratios for a given stock ticker.
+    This provides insights into the company's valuation, profitability, and financial health.
+    """
+    try:
+        stock = yf.Ticker(ticker)
+        info = stock.info
+        
+        ratios = {
+            "trailing_pe": info.get("trailingPE", "N/A"),
+            "forward_pe": info.get("forwardPE", "N/A"),
+            "price_to_book": info.get("priceToBook", "N/A"),
+            "price_to_sales": info.get("priceToSalesTrailing12Months", "N/A"),
+            "debt_to_equity": info.get("debtToEquity", "N/A"),
+            "return_on_equity": info.get("returnOnEquity", "N/A"),
+            "profit_margins": info.get("profitMargins", "N/A"),
+        }
+        
+        return ratios
+    except Exception as e:
+        return {"error": f"Could not retrieve financial ratios: {e}"}
+
+@tool
+def get_analyst_ratings(ticker: str) -> dict:
+    """
+    Fetches the latest analyst ratings and price targets for a stock.
+    This helps understand the consensus view from market professionals.
+    """
+    try:
+        stock = yf.Ticker(ticker)
+        recommendations = stock.recommendations
+        
+        if recommendations.empty:
+            return {"message": "No analyst ratings found for this period."}
+            
+        # Get the most recent ratings
+        latest_ratings = recommendations.tail(5)
+        
+        # Summarize ratings
+        rating_counts = recommendations['strongBuy'].count() + recommendations['buy'].count()
+        hold_counts = recommendations['hold'].count()
+        sell_counts = recommendations['sell'].count() + recommendations['strongSell'].count()
+
+        summary = {
+            "period": recommendations.index.max().strftime('%Y-%m'),
+            "buy_ratings": int(rating_counts),
+            "hold_ratings": int(hold_counts),
+            "sell_ratings": int(sell_counts),
+            "latest_recommendations": latest_ratings[['firm', 'toGrade']].to_dict('records')
+        }
+        return summary
+    except Exception as e:
+        return {"error": f"Could not retrieve analyst ratings: {e}"}
+
+@tool
+def get_google_trends(keyword: str, timeframe: str = 'today 3-m') -> dict:
+    """
+    Fetches Google Trends data for a specific keyword over a given timeframe (e.g., 'today 3-m').
+    This is useful for gauging public interest in a company or its products, especially for consumer brands.
+    The keyword should ideally be the company's name (e.g., 'NVIDIA').
+    """
+    try:
+        pytrends = TrendReq(hl='en-US', tz=360)
+        pytrends.build_payload([keyword], cat=0, timeframe=timeframe, geo='', gprop='')
+        interest_over_time_df = pytrends.interest_over_time()
+
+        if interest_over_time_df.empty:
+            return {"message": "No Google Trends data found for this keyword."}
+        
+        avg_interest = interest_over_time_df[keyword].mean()
+        peak_interest_date = interest_over_time_df[keyword].idxmax().strftime('%Y-%m-%d')
+        
+        return {
+            "keyword": keyword,
+            "average_interest_score": round(avg_interest, 2),
+            "peak_interest_date": peak_interest_date,
+            "comment": f"The average interest score is {round(avg_interest, 2)} out of 100 over the last 3 months."
+        }
+    except Exception as e:
+        return {"error": f"Could not retrieve Google Trends data: {e}"}
+    
 @tool
 def get_economic_data(series_id: str = 'GDP') -> dict:
     """
@@ -323,6 +410,7 @@ def create_agent(llm: ChatOpenAI, tools: list, system_prompt: str):
     agent = create_openai_functions_agent(llm, tools, prompt)
     return AgentExecutor(agent=agent, tools=tools, verbose=False, return_intermediate_steps=True)
 
+
 # --- Agent Definitions ---
 
 def get_news_analyst_agent(llm: ChatOpenAI):
@@ -363,21 +451,34 @@ def get_researcher_agent(llm: ChatOpenAI):
         get_price_summary, 
         news_analysis_tool, 
         get_economic_data, 
-        get_latest_filings
+        get_latest_filings,
+        get_financial_ratios,
+        get_analyst_ratings,
+        get_google_trends
     ]
 
     # 2. UPDATE the system prompt with a new step for the agent's plan
     researcher_system_prompt = (
-        "You are an expert financial researcher and the project manager. Your goal is to produce a detailed analysis paragraph by delegating tasks to specialist agents and tools.\n\n"
-        "Follow this exact sequence:\n"
-        "1. **Consult Memory:** Use `read_notes_from_memory` for historical context.\n"
-        "2. **Gather Company Data:** Use `get_company_info` for an overview.\n"
-        "3. **Analyze Price Action:** Use `get_price_summary` to understand recent stock performance.\n"
-        "4. **Delegate News Analysis:** Use the `Financial_News_Analyst` tool to get a summary of market sentiment. This specialist will handle all news processing.\n"  
-        "5. **Analyze Macro-Economic Context:** Use `get_economic_data` to understand the broader economic environment.\n"
-        "6. **Review Company Filings:** Use `get_latest_filings` to understand the company's official financial health.\n"
-        "7. **Synthesize Analysis:** Combine all gathered information into a single, detailed analysis paragraph. This paragraph MUST be your final output.\n\n"
-        "**Formatting instructions:** Ensure your final output is a well-formatted, readable paragraph with proper spacing and punctuation. Do not output markdown or any other special formatting."
+        "You are an expert financial researcher. Your primary goal is to produce a detailed analysis paragraph by dynamically adapting your research strategy based on the company's Market Cap and Sector.\n\n"
+        "**Execution Plan:**\n"
+        "1.  **Consult Memory (MANDATORY FIRST STEP):** Always begin by using the `read_notes_from_memory` tool to gather historical context.\n"
+        "2.  **Fetch Company Info & Classify:** Use the `get_company_info` tool to get the company's market cap (`marketCapRaw`) and `sector`.\n"
+        "3.  **Dynamic Tool Selection (Two-Factor Approach):** Based on the info gathered, select and prioritize tools as follows:\n\n"
+        "    **A. By Market Cap (Primary Filter):**\n"
+        "    - **Penny Stock (<$50M):** Your scope is limited. Prioritize `get_price_summary` and `Financial_News_Analyst`. Generally, skip filings and economic data.\n"
+        "    - **Mid-Cap ($2B–$10B):** Perform a balanced analysis. Use `get_price_summary`, `Financial_News_Analyst`, and `get_latest_filings`. `get_economic_data` is optional.\n"
+        "    - **Large-Cap (>$10B):** Conduct a comprehensive analysis. Use the full suite of tools.\n\n"
+        "    **B. By Sector (Secondary Prioritization):** Use the sector to refine your focus and prioritize what to look for with the tools you've selected.\n"
+        "    - **Technology or Healthcare:** Pay extremely close attention to `Financial_News_Analyst` for news on innovation, competition, clinical trials, or regulatory changes. In `get_latest_filings`, look for R&D spending.\n"
+        "    - **Financials or Industrials:** `get_economic_data` is crucial (e.g., interest rates, GDP). In `get_latest_filings`, focus on balance sheet health and debt.\n"
+        "    - **Consumer Cyclical or Consumer Defensive:** `get_economic_data` is very important (e.g., consumer sentiment). Also monitor `Financial_News_Analyst` for supply chain and demand trends.\n"
+        "    - **Utilities, Energy, or Real Estate:** Focus on `get_latest_filings` for dividend sustainability and debt. `get_economic_data` is important for interest rate sensitivity.\n\n"
+        "    **C. Add Deeper Insight with Specialist Tools:** After the primary analysis, use these tools to add more color:\n"
+        "    - **`get_financial_ratios`:** Use this to assess the company's valuation and health. Are they profitable (return_on_equity)? Are they expensive (trailing_pe)?\n"
+        "    - **`get_analyst_ratings`:** Check this to see if Wall Street agrees with your assessment. Is there a strong consensus?\n"
+        "    - **For consumer-facing companies (e.g., Technology, Consumer Cyclical):** Use `get_google_trends` with the company's name as the keyword to check for public interest trends. Is their brand gaining or losing momentum?\n\n"
+        "4.  **Synthesize Final Analysis:** After executing your dynamic research plan, combine all gathered information into a single, detailed analysis paragraph. This paragraph MUST be your final output.\n\n"
+        "**Formatting Instructions:** Ensure your final output is a well-formatted, readable paragraph with proper spacing and punctuation. Do not output markdown."
     )
     return create_agent(llm, researcher_tools, researcher_system_prompt)
 
@@ -397,8 +498,8 @@ def get_refiner_agent(llm: ChatOpenAI):
         "You are a 'Refiner' agent. Your task is to rewrite and improve an initial financial analysis based on a critique.\n\n"
         "Initial Analysis:\n{initial_analysis}\n\n"
         "Critique:\n{critique}\n\n"
-        "Your Final, Rewritten Analysis (as a single, polished paragraph):\n"
-        "**Formatting instructions:** Ensure your final output is a single, well-formatted, and readable paragraph. Do not use markdown. The text should be suitable for direct display in a user interface."
+        "Your Final, Rewritten Analysis :\n"
+        "**Formatting instructions:** Ensure your final output is a well-formatted, readable paragraph with proper header, spacing and punctuation. Do not output markdown."
     )
     return refiner_prompt | llm
 

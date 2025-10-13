@@ -18,20 +18,20 @@ class AgentState(TypedDict):
 # --- Agent Nodes ---
 def researcher_node(state):
     """Researches and provides the initial analysis."""
-    researcher_agent = get_researcher_agent(ChatOpenAI(model="gpt-4o-mini", temperature=0))
+    researcher_agent = get_researcher_agent(ChatOpenAI(model="gpt-4.1-mini", temperature=0))
     result = researcher_agent.invoke({"input": f"Analyze the stock {state['ticker']}"})
     return {"research_steps": result['intermediate_steps'], "initial_analysis": result['output']}
 
 def critic_node(state):
     """Critiques the initial analysis."""
-    critic_agent = get_critic_agent(ChatOpenAI(model="gpt-4o-mini", temperature=0))
+    critic_agent = get_critic_agent(ChatOpenAI(model="gpt-4.1-mini", temperature=0))
     critique_text = critic_agent.invoke({"initial_analysis": state["initial_analysis"]}).content
     # st.write(critique_text)
     return {"critique": critique_text}
 
 def refiner_node(state):
     """Refines the analysis based on the critique."""
-    refiner_agent = get_refiner_agent(ChatOpenAI(model="gpt-4o-mini", temperature=0))
+    refiner_agent = get_refiner_agent(ChatOpenAI(model="gpt-4.1-mini", temperature=0))
     refined_text = refiner_agent.invoke({
         "initial_analysis": state["initial_analysis"],
         "critique": state["critique"]
@@ -41,7 +41,7 @@ def refiner_node(state):
 
 def save_memory_node(state):
     """Generates a key insight and saves it to memory."""
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0)
     
     # Use an LLM to generate a concise note from the refined analysis
     note_generation_prompt = ChatPromptTemplate.from_template(
