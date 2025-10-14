@@ -112,7 +112,8 @@ TOOL_DESCRIPTIONS = {
     "get_latest_filings": "Reviewing SEC Filings",
     "get_analyst_ratings": "Checking Analyst Ratings",
     "get_economic_data": "Assessing Economic Context",
-    "get_google_trends": "Analyzing Public Interest"
+    "get_google_trends": "Analyzing Public Interest",
+    "search_specific_news": "Industry Specific News"
 }
 
 
@@ -130,7 +131,116 @@ def display_memory(ticker: str):
         if ticker in memory and memory[ticker]:
             # with st.expander(f"**{ticker}**", expanded=True):
             for note in memory[ticker]:
-                st.info(note)
+                st.info(note.replace('$', '\\$'))
+
+
+# def display_research_details(company_info, price_summary, news_summary, filings_data, initial_analysis):
+#     """
+#     Renders the detailed research findings in Streamlit containers.
+
+#     Args:
+#         company_info (dict): Data about the company.
+#         price_summary (dict): Stock price and technical indicators.
+#         news_summary (dict): The output from the news analyst agent.
+#         filings_data (list): A list of dictionaries containing SEC filing info.
+#         initial_analysis (str): The initial analysis paragraph from the researcher.
+#     """
+#     if company_info:
+#         with st.container():
+#             st.markdown("##### Company Information")
+#             st.json(company_info)
+
+#     if price_summary:
+#         with st.container():
+#             st.markdown("##### Stock Indicators")
+#             st.json(price_summary)
+    
+#     if news_summary:
+#         with st.container():
+#             st.markdown("##### News Sentiment Summary")
+#             summary_text = news_summary.get('output', 'No summary provided.')
+#             st.info(summary_text.replace('$', '\\$'))
+
+#     if filings_data and isinstance(filings_data, list):
+#         with st.container():
+#             st.markdown("##### Latest SEC Filings (10-K & 10-Q)")
+#             st.dataframe(pd.DataFrame(filings_data))
+
+#     if initial_analysis:
+#         st.markdown("##### Initial Analysis")
+#         st.text(initial_analysis)
+
+def display_stock_snapshot(company_info, price_summary):
+    """
+    Renders a visually appealing stock snapshot dashboard using st.metric and columns.
+    """
+    if not company_info or not price_summary:
+        st.warning("Stock data is not available to display snapshot.")
+        return
+    st.markdown("##### Stock Snapshot")
+    # --- Header: Company Name ---
+    # st.subheader(f"{company_info.get('longName', 'N/A')}")
+    st.metric(label="Latest Price", value=price_summary.get('latest_price', 'N/A'))
+    
+    # st.markdown("---") # Visual separator
+
+    # --- Key Metrics in Columns ---
+    col1, col2 = st.columns(2)
+    with col1:
+        # Use the raw numerical value for calculations
+        market_cap_str = company_info.get('marketCap')
+
+        cleaned_str = market_cap_str.replace('$', '').replace(',', '')
+        market_cap_val = float(cleaned_str)
+        
+        if market_cap_val and market_cap_val > 0:
+            if market_cap_val >= 1_000_000_000:
+                display_cap = f"${market_cap_val / 1_000_000_000:.2f} B"
+            else:
+                display_cap = f"${market_cap_val / 1_000_000:.2f} M"
+            st.metric(label="Market Cap", value=display_cap)
+        else:
+            st.metric(label="Market Cap", value="N/A")
+            
+    with col2:
+        low = price_summary.get('52_week_low', 'N/A')
+        high = price_summary.get('52_week_high', 'N/A')
+        st.metric(label="52-Week Range", value=f"{low} - {high}")
+
+    # st.markdown("---")
+
+    # --- Trend & Momentum Analysis with Context ---
+    trend_conclusion = price_summary.get('trend_analysis', {}).get('trend_conclusion', 'N/A')
+    rsi_condition = price_summary.get('momentum_analysis', {}).get('condition', 'N/A')
+    
+    st.markdown(f"**Trend:** {trend_conclusion} | **Momentum:** {rsi_condition}")
+
+
+def display_research_details(company_info, price_summary, news_summary, filings_data, initial_analysis):
+    """
+    Renders the detailed research findings, starting with a visual snapshot
+    and followed by deeper insights.
+    """
+    
+    # --- 1. Display the Visual Stock Snapshot first ---
+    display_stock_snapshot(company_info, price_summary)
+        
+    # --- 2. Display Deeper Insights ---
+    if news_summary:
+        with st.container():
+            st.markdown("##### News Sentiment Summary")
+            summary_text = news_summary.get('output', 'No summary provided.')
+            st.info(summary_text.replace('$', '\\$'))
+
+    if filings_data and isinstance(filings_data, list) and not pd.DataFrame(filings_data).empty:
+        with st.container():
+            st.markdown("##### Latest SEC Filings")
+            st.dataframe(pd.DataFrame(filings_data))
+
+    if initial_analysis:
+        with st.container():
+            st.markdown("##### Initial Analysis")
+            st.text(initial_analysis)
 
 # --- Sidebar controls ---
 st.sidebar.header("AI Financial Analysis")
@@ -199,11 +309,13 @@ def main():
 
     with agent_col:
         st.markdown(f"#### Analysis for {ticker_symbol}")
-        with st.container(height=600, border=True, gap="medium"):
-            with st.spinner('🤖 Agent is working on your request...', show_time=True):
+        with st.spinner(f'🤖 Analyzing {ticker_symbol} for you...', show_time=True):
+            with st.container(height=600, border=True, gap="medium"):
+                final_flex_placeholder = st.empty()
+                final_report_placeholder = st.empty()
                 research_placeholder = st.empty()
                 critic_placeholder = st.empty()
-                final_report_placeholder = st.empty()
+                
                 
                 st.sidebar.subheader('Agent Status')
 
@@ -212,16 +324,17 @@ def main():
                     status_placeholder.info("Workflow started!")
                     st.latex(r'''\cdots''')
 
-                    st.markdown("##### Researcher's Plan")
-                    plan_placeholder = st.empty() # A single placeholder for the entire plan
+                    with st.expander("##### Researcher's Plan", expanded=True):
+                        plan_placeholder = st.empty() # A single placeholder for the entire plan
                     chosen_tools = [] # A list to track the tools the agent decides to use
-                    st.markdown("##### Workflow Agents")
+                    
+                    with st.expander("##### Workflow Agents", expanded=True):
+                        research_status_placeholder = st.empty()
+                        critic_status_placeholder = st.empty()
+                        refine_status_placeholder = st.empty()
 
-                    research_status_placeholder = st.empty()
-                    critic_status_placeholder = st.empty()
-                    refine_status_placeholder = st.empty()
-                    memory_status_placeholder = st.empty()
-                    st.latex(r'''\cdots''')
+                        memory_status_placeholder = st.empty()
+                        st.latex(r'''\cdots''')
 
                 agent_workflow = build_agentic_workflow()
                 inputs = {"ticker": ticker_symbol}
@@ -254,51 +367,33 @@ def main():
 
                             research_status_placeholder.info("🕵️‍♂️ **Researcher Agent:** Executing research...")
                             
-                            with research_placeholder.expander("Research", expanded=False):
+                            with research_placeholder.expander("🔬 Research Trail", expanded=False):
                                 
                                 intermediate_steps = value.get('research_steps', [])
-                                company_info = next((obs for act, obs in intermediate_steps if act.tool == "get_company_info"), None)
-                                price_summary = next((obs for act, obs in intermediate_steps if act.tool == "get_price_summary"), None)
-                                news_summary_output = next((obs for act, obs in intermediate_steps if act.tool == "Financial_News_Analyst"), None)
-                                filings_data = next((obs for act, obs in intermediate_steps if act.tool == "get_latest_filings"), [])
-
-                                if company_info:
-                                    # with info_container:
-                                    with st.container():
-                                        st.markdown("##### Company Information")
-                                        st.json(company_info)
-
-                                # ADD a new block to display the price summary
-                                if price_summary:
-                                    with st.container():
-                                        st.markdown("##### Stock Indicators")
-                                        st.json(price_summary)
                                 
-                                if news_summary_output:
-                                    with st.container():
-                                        st.markdown("##### News Sentiment Summary")
-                                        # The output is a dictionary, extract the 'output' key
-                                        st.info(news_summary_output.get('output', 'No summary provided.'))
-                            
-                                # New logic to display filings data
-                                if filings_data and isinstance(filings_data, list):
-                                    # with filings_container:
-                                    with st.container():
-                                        st.markdown("##### Latest SEC Filings (10-K & 10-Q)")
-                                        st.dataframe(pd.DataFrame(filings_data))
-
+                                st.session_state['company_info'] = next((obs for act, obs in intermediate_steps if act.tool == "get_company_info"), None)
+                                st.session_state['price_summary']  = next((obs for act, obs in intermediate_steps if act.tool == "get_price_summary"), None)
+                                st.session_state['news_summary_output'] = next((obs for act, obs in intermediate_steps if act.tool == "Financial_News_Analyst"), None)
+                                st.session_state['filings_data'] = next((obs for act, obs in intermediate_steps if act.tool == "get_latest_filings"), [])
+                                
                                 if "initial_analysis" in value:
-                                    st.markdown("##### Initial Analysis")
-                                    st.text(value["initial_analysis"])    
+                                    st.session_state['initial_analysis'] = value["initial_analysis"]
 
-                            # st.json(intermediate_steps)                               
-
+                                display_research_details(
+                                    st.session_state['company_info'],
+                                    st.session_state['price_summary'],
+                                    st.session_state['news_summary_output'],
+                                    st.session_state['filings_data'],
+                                    st.session_state['initial_analysis']
+                                    )
+                                
                         elif key == "critic":
                             research_status_placeholder.success("🕵️‍♂️ **Researcher Agent:** Research complete.")
                             critic_status_placeholder.warning("🧐 **Critic Agent:** Evaluating the initial analysis...")
-                            with critic_placeholder.expander('critique'):
-                                if "critique" in value:
-                                    st.markdown(value["critique"])
+                            if "critique" in value:
+                                st.session_state['critique'] = value["critique"]
+                                with critic_placeholder.expander('🧐 critique'):
+                                    st.markdown(st.session_state['critique'])
 
                         elif key == "refiner":
                             critic_status_placeholder.success("🧐 **Critic Agent:** Evaluation complete.")
@@ -312,14 +407,30 @@ def main():
                         
                             if "memory_confirmation" in value:
                                 memory_confirmation = value["memory_confirmation"]
-                                
 
                 status_placeholder.success("Workflow Complete!")
 
-            with final_report_placeholder.container():
-                    st.markdown("#### Final Report")
-                    with st.container(border=True, height=400):
-                        st.markdown(final_analysis.replace('$', '\\$'))
+            
+            with final_flex_placeholder.container(horizontal=True, height="content", horizontal_alignment="right"):
+                with st.popover('🔬 Research Trail'):
+                    display_research_details(
+                                    st.session_state['company_info'],
+                                    st.session_state['price_summary'],
+                                    st.session_state['news_summary_output'],
+                                    st.session_state['filings_data'],
+                                    st.session_state['initial_analysis']
+                                    )
+                if st.session_state['critique']:
+                    with st.popover('🧐 Critique'):
+                        st.markdown(st.session_state['critique'])
+            
+            with final_report_placeholder.container(height=500,width="stretch", border=False):
+                st.markdown(final_analysis.replace('$', '\\$'))
+                st.latex(r'''\cdots''')
+                research_placeholder.empty()
+                critic_placeholder.empty()
+            
+            
                 # st.info(f"**Learning Update:** {memory_confirmation}")
 
 if __name__ == "__main__":

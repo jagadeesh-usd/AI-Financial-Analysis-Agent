@@ -12,7 +12,7 @@ from edgar import Company, set_identity
 import requests
 import re
 from bs4 import BeautifulSoup
-from datetime import datetime
+from datetime import datetime, timedelta
 from pytrends.request import TrendReq
 
 
@@ -130,6 +130,45 @@ def get_stock_news(ticker: str) -> list[str]:
         return [f"An error occurred: {e}"]
 
 
+@tool
+def search_specific_news(ticker: str, keywords: list[str]) -> list[str]:
+    """
+    Searches for news articles about a company from the last 30 days that contain specific keywords.
+    Use this to find targeted information like 'partnerships', 'acquisitions', 'speculation', 'product launch', or 'regulatory approval'.
+    The `keywords` argument should be a list of search terms.
+    """
+    try:
+        api_key = st.secrets["NEWS_API_KEY"]
+    except Exception:
+        return ["Error: NewsAPI key not found in Streamlit secrets."]
+
+    # Calculate date 30 days ago
+    date_from = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+    
+    # Format keywords for the API query
+    query_keywords = " OR ".join(keywords)
+    query = f'"{ticker}" AND ({query_keywords})'
+    
+    url = (f'https://newsapi.org/v2/everything?'
+           f'q={query}&'
+           f'from={date_from}&'
+           f'sortBy=relevancy&'
+           f'apiKey={api_key}')
+    
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        articles = response.json().get('articles', [])
+        
+        if not articles:
+            return [f"No specific news found for keywords '{', '.join(keywords)}' in the last 30 days."]
+            
+        # Return a list of the top 5 most relevant headlines
+        return [article['title'] for article in articles[:5]]
+        
+    except Exception as e:
+        return [f"An error occurred while fetching specific news: {e}"]
+    
 @tool
 def get_price_summary(ticker: str) -> dict:
     """
@@ -498,7 +537,8 @@ def get_researcher_agent(llm: ChatOpenAI):
         get_latest_filings,
         get_financial_ratios,
         get_analyst_ratings,
-        get_google_trends
+        get_google_trends,
+        search_specific_news
     ]
 
     # 2. UPDATE the system prompt with a new step for the agent's plan
@@ -552,7 +592,7 @@ def get_researcher_agent(llm: ChatOpenAI):
         
         "    --- SECTOR-BASED FOCUS ---\n\n"
         "    After selecting your tools, use the company's sector to refine your focus:\n"
-        "    - **Technology/Healthcare:** Focus on innovation, R&D spending, and competitive news.\n"
+        "    - **Technology/Healthcare:** Focus on innovation and competition. **Use `search_specific_news` with keywords like 'partnership', 'acquisition', and 'product launch'** to find key strategic moves.\n"
         "    - **Financials/Industrials:** Focus on balance sheet health, debt, and economic indicators like interest rates.\n"
         "    - **Consumer Cyclical/Defensive:** Focus on consumer sentiment and supply chain news.\n"
         "    - **Utilities/Energy/Real Estate:** Focus on debt, dividends, and interest rate sensitivity.\n\n"
@@ -580,7 +620,7 @@ def get_refiner_agent(llm: ChatOpenAI):
         "Critique:\n{critique}\n\n"
         "Your Final, Rewritten Analysis:\n"
         "**Formatting instructions:** Your final output must be a well-structured report using markdown. "
-        "Include a main header (e.g., '### <company name>'), use bolding for key metrics, and structure the content into clear, readable paragraphs with sub header (##### Company Overview, Growth Drivers, Profitability and Financial Health, Cost Structure and Investments, Risks and Competitive Landscape, Market Performance and Analyst Sentiment, Summary)." 
+        "Include a main header (e.g., '### <company name>'), use bolding for key metrics, and structure the content into clear, readable paragraphs with sub header (##### Company Overview, Growth Drivers, Profitability and Financial Health, Cost Structure and Investments, Risks and Competitive Landscape, Market Performance and Analyst Sentiment, Recommentation, Summary)." 
     )
     return refiner_prompt | llm
 
