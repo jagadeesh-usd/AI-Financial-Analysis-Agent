@@ -102,6 +102,20 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# --- Maps tool names to user-friendly text ---
+TOOL_DESCRIPTIONS = {
+    "read_notes_from_memory": "Consulting Past Insights",
+    "get_company_info": "Fetching Company Info",
+    "get_price_summary": "Analyzing Price Trends",
+    "Financial_News_Analyst": "Analyzing News Sentiment",
+    "get_financial_ratios": "Evaluating Financial Ratios",
+    "get_latest_filings": "Reviewing SEC Filings",
+    "get_analyst_ratings": "Checking Analyst Ratings",
+    "get_economic_data": "Assessing Economic Context",
+    "get_google_trends": "Analyzing Public Interest"
+}
+
+
 # --- Helper Functions ---
 def display_memory(ticker: str):
     """Reads and displays the agent's memory for a given ticker."""
@@ -197,6 +211,12 @@ def main():
                     status_placeholder = st.empty()
                     status_placeholder.info("Workflow started!")
                     st.latex(r'''\cdots''')
+
+                    st.markdown("##### Researcher's Plan")
+                    plan_placeholder = st.empty() # A single placeholder for the entire plan
+                    chosen_tools = [] # A list to track the tools the agent decides to use
+                    st.markdown("##### Workflow Agents")
+
                     research_status_placeholder = st.empty()
                     critic_status_placeholder = st.empty()
                     refine_status_placeholder = st.empty()
@@ -212,6 +232,26 @@ def main():
                 for event in agent_workflow.stream(inputs):
                     for key, value in event.items():
                         if key == "researcher":
+                            intermediate_steps = value.get('research_steps', [])
+
+                            chosen_tools = [] 
+                            if intermediate_steps:
+                                # Loop through ALL tool calls in the event, not just the last one
+                                for step in intermediate_steps:
+                                    action = step[0] # The first element is the AgentAction
+                                    tool_name = action.tool
+                                    if tool_name in TOOL_DESCRIPTIONS:
+                                        tool_desc = TOOL_DESCRIPTIONS[tool_name]
+                                        if tool_desc not in chosen_tools:
+                                            chosen_tools.append(tool_desc)
+                            
+                            # Update the sidebar placeholder with the complete, ordered plan
+                            if chosen_tools:
+                                plan_markdown = ""
+                                for i, tool in enumerate(chosen_tools):
+                                    plan_markdown += f"{i+1}. {tool}\n"
+                                plan_placeholder.markdown(plan_markdown)
+
                             research_status_placeholder.info("🕵️‍♂️ **Researcher Agent:** Executing research...")
                             
                             with research_placeholder.expander("Research", expanded=False):
@@ -231,7 +271,7 @@ def main():
                                 # ADD a new block to display the price summary
                                 if price_summary:
                                     with st.container():
-                                        st.markdown("##### 30-Day Price Summary")
+                                        st.markdown("##### Stock Indicators")
                                         st.json(price_summary)
                                 
                                 if news_summary_output:
@@ -249,7 +289,9 @@ def main():
 
                                 if "initial_analysis" in value:
                                     st.markdown("##### Initial Analysis")
-                                    st.text(value["initial_analysis"])                                     
+                                    st.text(value["initial_analysis"])    
+
+                            # st.json(intermediate_steps)                               
 
                         elif key == "critic":
                             research_status_placeholder.success("🕵️‍♂️ **Researcher Agent:** Research complete.")
@@ -277,7 +319,7 @@ def main():
             with final_report_placeholder.container():
                     st.markdown("#### Final Report")
                     with st.container(border=True, height=400):
-                        st.text(final_analysis)
+                        st.markdown(final_analysis.replace('$', '\\$'))
                 # st.info(f"**Learning Update:** {memory_confirmation}")
 
 if __name__ == "__main__":

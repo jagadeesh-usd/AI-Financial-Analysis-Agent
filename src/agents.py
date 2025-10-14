@@ -129,28 +129,72 @@ def get_stock_news(ticker: str) -> list[str]:
     except Exception as e:
         return [f"An error occurred: {e}"]
 
+
 @tool
 def get_price_summary(ticker: str) -> dict:
     """
-    Retrieves a summary of the stock's price movements over the last 30 days.
-    Provides the recent high, low, and percentage change.
+    Retrieves a comprehensive price summary and key technical indicators for a stock.
+    Provides the latest price, 52-week range, 50-day and 200-day moving averages, 
+    and the 14-day Relative Strength Index (RSI) to understand the stock's trend and momentum.
     """
     try:
         stock = yf.Ticker(ticker)
-        hist = stock.history(period="30d")
+        # Fetch 1 year of data to calculate all indicators
+        hist = stock.history(period="1y")
         if hist.empty:
-            return {"error": "Could not retrieve 30-day price history."}
+            return {"error": "Could not retrieve price history."}
 
-        thirty_day_high = hist['High'].max()
-        thirty_day_low = hist['Low'].min()
-        thirty_day_close = hist['Close'][-1]
-        thirty_day_open = hist['Open'][0]
-        thirty_day_change_pct = ((thirty_day_close - thirty_day_open) / thirty_day_open) * 100
+        # --- Key Price Points ---
+        latest_close = hist['Close'][-1]
+        fifty_two_week_high = hist['High'].max()
+        fifty_two_week_low = hist['Low'].min()
+
+        # --- Trend Indicators (Moving Averages) ---
+        # Calculate 50-day and 200-day moving averages
+        ma_50 = hist['Close'].rolling(window=50).mean().iloc[-1]
+        ma_200 = hist['Close'].rolling(window=200).mean().iloc[-1]
+        
+        # Determine trend based on MAs
+        if latest_close > ma_50 and ma_50 > ma_200:
+            trend = "Strong Uptrend"
+        elif latest_close > ma_50 and latest_close > ma_200:
+            trend = "Uptrend"
+        elif latest_close < ma_50 and ma_50 < ma_200:
+            trend = "Strong Downtrend"
+        elif latest_close < ma_50 and latest_close < ma_200:
+            trend = "Downtrend"
+        else:
+            trend = "Sideways/Consolidating"
+
+        # --- Momentum Indicator (RSI) ---
+        delta = hist['Close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        rsi = 100 - (100 / (1 + rs))
+        latest_rsi = rsi.iloc[-1]
+        
+        # Determine overbought/oversold condition
+        if latest_rsi > 70:
+            rsi_condition = "Overbought"
+        elif latest_rsi < 30:
+            rsi_condition = "Oversold"
+        else:
+            rsi_condition = "Neutral"
 
         return {
-            "30-day high": f"${thirty_day_high:.2f}",
-            "30-day low": f"${thirty_day_low:.2f}",
-            "30-day change": f"{thirty_day_change_pct:.2f}%"
+            "latest_price": f"${latest_close:.2f}",
+            "52_week_high": f"${fifty_two_week_high:.2f}",
+            "52_week_low": f"${fifty_two_week_low:.2f}",
+            "trend_analysis": {
+                "50_day_ma": f"${ma_50:.2f}",
+                "200_day_ma": f"${ma_200:.2f}",
+                "trend_conclusion": trend
+            },
+            "momentum_analysis": {
+                "rsi_14_day": f"{latest_rsi:.2f}",
+                "condition": rsi_condition
+            }
         }
     except Exception as e:
         return {"error": f"Failed to calculate price summary: {e}"}
@@ -458,27 +502,63 @@ def get_researcher_agent(llm: ChatOpenAI):
     ]
 
     # 2. UPDATE the system prompt with a new step for the agent's plan
+    # researcher_system_prompt = (
+    #     "You are an expert financial researcher. Your primary goal is to produce a detailed analysis paragraph by dynamically adapting your research strategy based on the company's Market Cap and Sector.\n\n"
+    #     "**Execution Plan:**\n"
+    #     "1.  **Consult Memory (MANDATORY FIRST STEP):** Always begin by using the `read_notes_from_memory` tool to gather historical context.\n"
+    #     "2.  **Fetch Company Info & Classify:** Use the `get_company_info` tool to get the company's market cap (`marketCap`) and `sector`.\n"
+    #     "3.  **Dynamic Tool Selection (Two-Factor Approach):** Based on the info gathered, select and prioritize tools as follows:\n\n"
+    #     "    **A. By Market Cap (Primary Filter):**\n"
+    #     "    - **Penny Stock (<$50M):** Your scope is strictly limited. Prioritize `get_price_summary` and `Financial_News_Analyst`. **Under no circumstances should you use the `get_latest_filings` or `get_economic_data` tools for penny stocks**, regardless of their sector. These tools are forbidden for this category.\n"
+    #     "    - **Small-Cap ($50M-$2B):** These are growing companies. A balanced analysis is required. **Prioritize using `get_price_summary`, `Financial_News_Analyst`, `get_latest_filings`, and `get_financial_ratios`.** The `get_economic_data` tool is optional.\n"
+    #     "    - **Mid-Cap ($2B–$10B):** For this category, you must execute the following 5-step analysis plan:\n"
+    #     "       1.  **Analyze Price Action:** Use the `get_price_summary` tool.\n"
+    #     "       2.  **Gauge Market Sentiment:** Use the `Financial_News_Analyst` tool.\n"
+    #     "       3.  **Evaluate Financial Health:** Use the `get_financial_ratios` tool.\n"
+    #     "       4.  **Review Primary Documents:** Use the `get_latest_filings` tool.\n"
+    #     "       5.  **Assess Macro Environment:** Use the `get_economic_data` tool, as this is critical for established companies..\n"
+    #     "    - **Large-Cap (>$10B):** Conduct a comprehensive analysis. Use the full suite of tools.\n\n"
+    #     "    **B. By Sector (Secondary Prioritization):** Use the sector to refine your focus and prioritize what to look for with the tools you've selected.\n"
+    #     "    - **Technology or Healthcare:** Pay extremely close attention to `Financial_News_Analyst` for news on innovation, competition, clinical trials, or regulatory changes. In `get_latest_filings`, look for R&D spending.\n"
+    #     "    - **Financials or Industrials:** `get_economic_data` is crucial (e.g., interest rates, GDP). In `get_latest_filings`, focus on balance sheet health and debt.\n"
+    #     "    - **Consumer Cyclical or Consumer Defensive:** `get_economic_data` is very important (e.g., consumer sentiment). Also monitor `Financial_News_Analyst` for supply chain and demand trends.\n"
+    #     "    - **Utilities, Energy, or Real Estate:** Focus on `get_latest_filings` for dividend sustainability and debt. `get_economic_data` is important for interest rate sensitivity.\n\n"
+    #     "    **C. Add Deeper Insight with Specialist Tools:** After the primary analysis, use these tools to add more color:\n"
+    #     "    - **`get_financial_ratios`:** Use this to assess the company's valuation and health. Are they profitable (return_on_equity)? Are they expensive (trailing_pe)?\n"
+    #     "    - **`get_analyst_ratings`:** Check this to see if Wall Street agrees with your assessment. Is there a strong consensus?\n"
+    #     "    - **For consumer-facing companies (e.g., Technology, Consumer Cyclical):** Use `get_google_trends` with the company's name as the keyword to check for public interest trends. Is their brand gaining or losing momentum?\n\n"
+    #     "4.  **Synthesize Final Analysis:** After executing your dynamic research plan, combine all gathered information into a single, detailed analysis paragraph. This paragraph MUST be your final output.\n\n"
+    #     "**Formatting Instructions:** Ensure your final output is a well-formatted, readable paragraph with proper spacing and punctuation. Do not output markdown."
+    # )
     researcher_system_prompt = (
-        "You are an expert financial researcher. Your primary goal is to produce a detailed analysis paragraph by dynamically adapting your research strategy based on the company's Market Cap and Sector.\n\n"
+        "You are an expert financial researcher. Your primary goal is to produce a detailed analysis by dynamically adapting your research strategy based on the company's Market Cap and Sector.\n\n"
         "**Execution Plan:**\n"
         "1.  **Consult Memory (MANDATORY FIRST STEP):** Always begin by using the `read_notes_from_memory` tool to gather historical context.\n"
         "2.  **Fetch Company Info & Classify:** Use the `get_company_info` tool to get the company's market cap (`marketCapRaw`) and `sector`.\n"
-        "3.  **Dynamic Tool Selection (Two-Factor Approach):** Based on the info gathered, select and prioritize tools as follows:\n\n"
-        "    **A. By Market Cap (Primary Filter):**\n"
-        "    - **Penny Stock (<$50M):** Your scope is limited. Prioritize `get_price_summary` and `Financial_News_Analyst`. Generally, skip filings and economic data.\n"
-        "    - **Mid-Cap ($2B–$10B):** Perform a balanced analysis. Use `get_price_summary`, `Financial_News_Analyst`, and `get_latest_filings`. `get_economic_data` is optional.\n"
-        "    - **Large-Cap (>$10B):** Conduct a comprehensive analysis. Use the full suite of tools.\n\n"
-        "    **B. By Sector (Secondary Prioritization):** Use the sector to refine your focus and prioritize what to look for with the tools you've selected.\n"
-        "    - **Technology or Healthcare:** Pay extremely close attention to `Financial_News_Analyst` for news on innovation, competition, clinical trials, or regulatory changes. In `get_latest_filings`, look for R&D spending.\n"
-        "    - **Financials or Industrials:** `get_economic_data` is crucial (e.g., interest rates, GDP). In `get_latest_filings`, focus on balance sheet health and debt.\n"
-        "    - **Consumer Cyclical or Consumer Defensive:** `get_economic_data` is very important (e.g., consumer sentiment). Also monitor `Financial_News_Analyst` for supply chain and demand trends.\n"
-        "    - **Utilities, Energy, or Real Estate:** Focus on `get_latest_filings` for dividend sustainability and debt. `get_economic_data` is important for interest rate sensitivity.\n\n"
-        "    **C. Add Deeper Insight with Specialist Tools:** After the primary analysis, use these tools to add more color:\n"
-        "    - **`get_financial_ratios`:** Use this to assess the company's valuation and health. Are they profitable (return_on_equity)? Are they expensive (trailing_pe)?\n"
-        "    - **`get_analyst_ratings`:** Check this to see if Wall Street agrees with your assessment. Is there a strong consensus?\n"
-        "    - **For consumer-facing companies (e.g., Technology, Consumer Cyclical):** Use `get_google_trends` with the company's name as the keyword to check for public interest trends. Is their brand gaining or losing momentum?\n\n"
-        "4.  **Synthesize Final Analysis:** After executing your dynamic research plan, combine all gathered information into a single, detailed analysis paragraph. This paragraph MUST be your final output.\n\n"
-        "**Formatting Instructions:** Ensure your final output is a well-formatted, readable paragraph with proper spacing and punctuation. Do not output markdown."
+        "3.  **Dynamic Tool Selection:** Based on the market cap, you must follow one of the specific analysis plans below. Do not add tools not listed in the plan for your chosen category.\n\n"
+        "    --- MARKET CAP BASED PLANS ---\n\n"
+        "    - **Penny Stock (<$50M):** Your scope is strictly limited. \n"
+        "      **Required Tools:** `get_price_summary`, `Financial_News_Analyst`.\n"
+        "      **Forbidden Tools:** Do not use `get_latest_filings` or `get_economic_data`.\n\n"
+
+        "    - **Small-Cap ($50M - $2B):** These are growing companies requiring a balanced analysis. \n"
+        "      **Required Tools:** `get_price_summary`, `Financial_News_Analyst`, `get_latest_filings`, `get_financial_ratios`.\n\n"
+
+        "    - **Mid-Cap ($2B - $10B):** These are established companies. The analysis must focus on sustainable growth and profitability. \n"
+        "      **Required Tools:** `get_price_summary`, `Financial_News_Analyst`, `get_financial_ratios`, `get_latest_filings`, `get_economic_data`.\n\n"
+
+        "    - **Large-Cap (>$10B):** A comprehensive analysis is required. You must use all available tools for a complete picture.\n"
+        "      **Required Tools:** `get_price_summary`, `Financial_News_Analyst`, `get_financial_ratios`, `get_latest_filings`, `get_economic_data`, `get_analyst_ratings`, and `get_google_trends` (if applicable to the sector).\n\n"
+        
+        "    --- SECTOR-BASED FOCUS ---\n\n"
+        "    After selecting your tools, use the company's sector to refine your focus:\n"
+        "    - **Technology/Healthcare:** Focus on innovation, R&D spending, and competitive news.\n"
+        "    - **Financials/Industrials:** Focus on balance sheet health, debt, and economic indicators like interest rates.\n"
+        "    - **Consumer Cyclical/Defensive:** Focus on consumer sentiment and supply chain news.\n"
+        "    - **Utilities/Energy/Real Estate:** Focus on debt, dividends, and interest rate sensitivity.\n\n"
+
+        "4.  **Synthesize Final Analysis:** After executing your chosen plan, combine all gathered information into a single, detailed analysis. This paragraph MUST be your final output.\n\n"
+        "**Formatting Instructions:** Do not output markdown. Ensure your final output is a well-formatted, readable paragraph."
     )
     return create_agent(llm, researcher_tools, researcher_system_prompt)
 
@@ -498,8 +578,9 @@ def get_refiner_agent(llm: ChatOpenAI):
         "You are a 'Refiner' agent. Your task is to rewrite and improve an initial financial analysis based on a critique.\n\n"
         "Initial Analysis:\n{initial_analysis}\n\n"
         "Critique:\n{critique}\n\n"
-        "Your Final, Rewritten Analysis :\n"
-        "**Formatting instructions:** Ensure your final output is a well-formatted, readable paragraph with proper header, spacing and punctuation. Do not output markdown."
+        "Your Final, Rewritten Analysis:\n"
+        "**Formatting instructions:** Your final output must be a well-structured report using markdown. "
+        "Include a main header (e.g., '### <company name>'), use bolding for key metrics, and structure the content into clear, readable paragraphs with sub header (##### Company Overview, Growth Drivers, Profitability and Financial Health, Cost Structure and Investments, Risks and Competitive Landscape, Market Performance and Analyst Sentiment, Summary)." 
     )
     return refiner_prompt | llm
 
