@@ -5,9 +5,13 @@ import json
 import os
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.callbacks import BaseCallbackHandler
 from src.chain import build_agentic_workflow
+from typing import Any, Dict, List
+
 
 # --- Page Configuration ---
+st.write("")
 st.set_page_config(
     page_title="AI Financial Analysis Agent",
     page_icon="📈",
@@ -108,6 +112,7 @@ TOOL_DESCRIPTIONS = {
     "get_company_info": "Fetching Company Info",
     "get_price_summary": "Analyzing Price Trends",
     "Financial_News_Analyst": "Analyzing News Sentiment",
+    "news_analysis_tool": "Analyzing News Sentiment",
     "get_financial_ratios": "Evaluating Financial Ratios",
     "get_latest_filings": "Reviewing SEC Filings",
     "get_analyst_ratings": "Checking Analyst Ratings",
@@ -116,6 +121,85 @@ TOOL_DESCRIPTIONS = {
     "search_specific_news": "Industry Specific News"
 }
 
+# --- Streamlit Callback Handler ---
+# class StreamlitCallbackHandler(BaseCallbackHandler):
+#     """A custom callback handler that updates the Streamlit UI in real-time."""
+
+#     def __init__(self, progress_bar, status_text_placeholder):
+#         self.progress_bar = progress_bar
+#         self.status_text = status_text_placeholder
+#         self.progress = 0
+#         self.total_steps = 1 + len(TOOL_DESCRIPTIONS) + 3 
+#         self.main_agent_nodes = ["researcher", "critic", "refiner", "save_memory"]
+
+#     def on_chain_start(self, serialized: Dict[str, Any], inputs: Dict[str, Any], **kwargs: Any) -> Any:
+#         """Called when a chain (agent) is about to run."""
+        
+#         # --- FIX: Add a guard clause to handle NoneType ---
+#         if not serialized:
+#             return # Ignore events that don't have a serialized dictionary
+
+#         agent_name = serialized.get("id", ["Unknown agent"])[-1]
+        
+#         if agent_name not in self.main_agent_nodes:
+#             return # Ignore internal chains like ChatPromptTemplate
+
+#         self.progress += 1
+#         progress_percent = min(100, int((self.progress / self.total_steps) * 100))
+#         self.progress_bar.progress(progress_percent)
+        
+#         self.status_text.info(f"🧠 **Agent:** {agent_name.capitalize()} started...")
+
+#     def on_tool_start(self, serialized: Dict[str, Any], input_str: str, **kwargs: Any) -> Any:
+#         """Called when a tool is about to be run."""
+#         self.progress += 1
+#         progress_percent = min(100, int((self.progress / self.total_steps) * 100))
+#         self.progress_bar.progress(progress_percent)
+
+#         tool_name = serialized.get("name", "Unknown tool")
+#         tool_desc = TOOL_DESCRIPTIONS.get(tool_name, tool_name)
+#         self.status_text.info(f"🛠️ **Tool:** Using {tool_desc}...")
+
+# In app.py
+
+# In app.py, replace your existing StreamlitCallbackHandler
+
+
+class StreamlitCallbackHandler(BaseCallbackHandler): 
+    """A custom callback handler that reliably tracks and updates the Streamlit UI
+    for major agentic workflow stages."""
+
+    def __init__(self, progress_bar, status_text_placeholder):
+        self.progress_bar = progress_bar
+        self.status_text = status_text_placeholder
+        
+        # Define the stages and their corresponding progress percentages
+        self.stages = {
+            "researcher": 25,
+            "critic": 50,
+            "refiner": 75,
+            "save_memory": 100
+        }
+        # Keep track of which main stages we have already logged to avoid duplicates
+        self.completed_stages = set()
+
+    def on_llm_start(self, serialized: Dict[str, Any], prompts: List[str], **kwargs: Any):
+        for stage in self.stages:
+            if stage in prompts[0].lower() and stage not in self.completed_stages:
+                progress = self.stages[stage]
+                self.progress_bar.progress(progress)
+                self.status_text.info(f"🧠 **Agent:** {stage.capitalize()} started...")
+                self.completed_stages.add(stage)
+
+
+    def on_tool_start(self, serialized: Dict[str, Any], input_str: str, **kwargs: Any) -> Any:
+        """Called when a tool is about to be run. Provides granular updates for the status text only."""
+        tool_name = serialized.get("name", "Unknown tool")
+        tool_desc = TOOL_DESCRIPTIONS.get(tool_name, "a specific tool")
+        
+        # This provides the real-time feedback on which tool is being used
+        # It does NOT affect the main progress bar.
+        self.status_text.info(f"🛠️ **Tool:** Using {tool_desc}...")
 
 # --- Helper Functions ---
 def display_memory(ticker: str):
@@ -133,42 +217,6 @@ def display_memory(ticker: str):
             for note in memory[ticker]:
                 st.info(note.replace('$', '\\$'))
 
-
-# def display_research_details(company_info, price_summary, news_summary, filings_data, initial_analysis):
-#     """
-#     Renders the detailed research findings in Streamlit containers.
-
-#     Args:
-#         company_info (dict): Data about the company.
-#         price_summary (dict): Stock price and technical indicators.
-#         news_summary (dict): The output from the news analyst agent.
-#         filings_data (list): A list of dictionaries containing SEC filing info.
-#         initial_analysis (str): The initial analysis paragraph from the researcher.
-#     """
-#     if company_info:
-#         with st.container():
-#             st.markdown("##### Company Information")
-#             st.json(company_info)
-
-#     if price_summary:
-#         with st.container():
-#             st.markdown("##### Stock Indicators")
-#             st.json(price_summary)
-    
-#     if news_summary:
-#         with st.container():
-#             st.markdown("##### News Sentiment Summary")
-#             summary_text = news_summary.get('output', 'No summary provided.')
-#             st.info(summary_text.replace('$', '\\$'))
-
-#     if filings_data and isinstance(filings_data, list):
-#         with st.container():
-#             st.markdown("##### Latest SEC Filings (10-K & 10-Q)")
-#             st.dataframe(pd.DataFrame(filings_data))
-
-#     if initial_analysis:
-#         st.markdown("##### Initial Analysis")
-#         st.text(initial_analysis)
 
 def display_stock_snapshot(company_info, price_summary):
     """
@@ -310,18 +358,27 @@ def main():
     with agent_col:
         st.markdown(f"#### Analysis for {ticker_symbol}")
         with st.spinner(f'🤖 Analyzing {ticker_symbol} for you...', show_time=True):
-            with st.container(height=600, border=True, gap="medium"):
+            # --- NEW: Setup progress bar and status text for the callback ---
+            progress_bar = st.empty()
+            status_text_placeholder = st.empty()
+            
+            with st.container(height=600, border=False, gap="small", width="stretch"):
                 final_flex_placeholder = st.empty()
                 final_report_placeholder = st.empty()
                 research_placeholder = st.empty()
                 critic_placeholder = st.empty()
-                
                 
                 st.sidebar.subheader('Agent Status')
 
                 with st.sidebar.container(border=True):
                     status_placeholder = st.empty()
                     status_placeholder.info("Workflow started!")
+                    
+                    progress_bar.progress(0)
+                    # --- NEW: Instantiate and use the callback handler ---
+                    streamlit_handler = StreamlitCallbackHandler(progress_bar, status_text_placeholder)
+                    config = {"callbacks": [streamlit_handler]}
+
                     st.latex(r'''\cdots''')
 
                     with st.expander("##### Researcher's Plan", expanded=True):
@@ -334,7 +391,8 @@ def main():
                         refine_status_placeholder = st.empty()
 
                         memory_status_placeholder = st.empty()
-                        st.latex(r'''\cdots''')
+
+                    st.latex(r'''\cdots''')
 
                 agent_workflow = build_agentic_workflow()
                 inputs = {"ticker": ticker_symbol}
@@ -342,7 +400,7 @@ def main():
                 final_analysis = "Analysis could not be generated."
                 memory_confirmation = "Key insights will be saved upon completion."
 
-                for event in agent_workflow.stream(inputs):
+                for event in agent_workflow.stream(inputs, config=config):
                     for key, value in event.items():
                         if key == "researcher":
                             intermediate_steps = value.get('research_steps', [])
@@ -386,7 +444,7 @@ def main():
                                     st.session_state['filings_data'],
                                     st.session_state['initial_analysis']
                                     )
-                                
+
                         elif key == "critic":
                             research_status_placeholder.success("🕵️‍♂️ **Researcher Agent:** Research complete.")
                             critic_status_placeholder.warning("🧐 **Critic Agent:** Evaluating the initial analysis...")
@@ -408,9 +466,9 @@ def main():
                             if "memory_confirmation" in value:
                                 memory_confirmation = value["memory_confirmation"]
 
+                progress_bar.progress(100)
                 status_placeholder.success("Workflow Complete!")
 
-            
             with final_flex_placeholder.container(horizontal=True, height="content", horizontal_alignment="right"):
                 with st.popover('🔬 Research Trail'):
                     display_research_details(
@@ -424,12 +482,13 @@ def main():
                     with st.popover('🧐 Critique'):
                         st.markdown(st.session_state['critique'])
             
-            with final_report_placeholder.container(height=500,width="stretch", border=False):
+            with final_report_placeholder.container(height=600,width="stretch", border=False):
                 st.markdown(final_analysis.replace('$', '\\$'))
                 st.latex(r'''\cdots''')
                 research_placeholder.empty()
                 critic_placeholder.empty()
-            
+                progress_bar.empty()
+                status_text_placeholder.empty()
             
                 # st.info(f"**Learning Update:** {memory_confirmation}")
 
