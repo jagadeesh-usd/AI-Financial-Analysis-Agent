@@ -3,8 +3,7 @@ import yfinance as yf
 import pandas as pd
 import json
 import os
-from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
+
 from langchain_core.callbacks import BaseCallbackHandler
 from src.chain import build_agentic_workflow
 from typing import Any, Dict, List
@@ -112,94 +111,68 @@ TOOL_DESCRIPTIONS = {
     "get_company_info": "Fetching Company Info",
     "get_price_summary": "Analyzing Price Trends",
     "Financial_News_Analyst": "Analyzing News Sentiment",
-    "news_analysis_tool": "Analyzing News Sentiment",
     "get_financial_ratios": "Evaluating Financial Ratios",
     "get_latest_filings": "Reviewing SEC Filings",
     "get_analyst_ratings": "Checking Analyst Ratings",
     "get_economic_data": "Assessing Economic Context",
     "get_google_trends": "Analyzing Public Interest",
-    "search_specific_news": "Industry Specific News"
+    "search_specific_news": "Industry Specific News",
+    "get_stock_news": "Analyzing Stock Indicators"
 }
 
-# --- Streamlit Callback Handler ---
-# class StreamlitCallbackHandler(BaseCallbackHandler):
-#     """A custom callback handler that updates the Streamlit UI in real-time."""
 
-#     def __init__(self, progress_bar, status_text_placeholder):
-#         self.progress_bar = progress_bar
-#         self.status_text = status_text_placeholder
-#         self.progress = 0
-#         self.total_steps = 1 + len(TOOL_DESCRIPTIONS) + 3 
-#         self.main_agent_nodes = ["researcher", "critic", "refiner", "save_memory"]
-
-#     def on_chain_start(self, serialized: Dict[str, Any], inputs: Dict[str, Any], **kwargs: Any) -> Any:
-#         """Called when a chain (agent) is about to run."""
-        
-#         # --- FIX: Add a guard clause to handle NoneType ---
-#         if not serialized:
-#             return # Ignore events that don't have a serialized dictionary
-
-#         agent_name = serialized.get("id", ["Unknown agent"])[-1]
-        
-#         if agent_name not in self.main_agent_nodes:
-#             return # Ignore internal chains like ChatPromptTemplate
-
-#         self.progress += 1
-#         progress_percent = min(100, int((self.progress / self.total_steps) * 100))
-#         self.progress_bar.progress(progress_percent)
-        
-#         self.status_text.info(f"🧠 **Agent:** {agent_name.capitalize()} started...")
-
-#     def on_tool_start(self, serialized: Dict[str, Any], input_str: str, **kwargs: Any) -> Any:
-#         """Called when a tool is about to be run."""
-#         self.progress += 1
-#         progress_percent = min(100, int((self.progress / self.total_steps) * 100))
-#         self.progress_bar.progress(progress_percent)
-
-#         tool_name = serialized.get("name", "Unknown tool")
-#         tool_desc = TOOL_DESCRIPTIONS.get(tool_name, tool_name)
-#         self.status_text.info(f"🛠️ **Tool:** Using {tool_desc}...")
-
-# In app.py
-
-# In app.py, replace your existing StreamlitCallbackHandler
-
-
-class StreamlitCallbackHandler(BaseCallbackHandler): 
-    """A custom callback handler that reliably tracks and updates the Streamlit UI
-    for major agentic workflow stages."""
-
+class StreamlitCallbackHandler(BaseCallbackHandler):
+    """A stateful callback handler that correctly attributes events to the active agent."""
     def __init__(self, progress_bar, status_text_placeholder):
         self.progress_bar = progress_bar
         self.status_text = status_text_placeholder
-        
-        # Define the stages and their corresponding progress percentages
         self.stages = {
             "researcher": 25,
             "critic": 50,
             "refiner": 75,
             "save_memory": 100
         }
-        # Keep track of which main stages we have already logged to avoid duplicates
         self.completed_stages = set()
+        self.active_agent = None
 
-    def on_llm_start(self, serialized: Dict[str, Any], prompts: List[str], **kwargs: Any):
-        for stage in self.stages:
-            if stage in prompts[0].lower() and stage not in self.completed_stages:
-                progress = self.stages[stage]
-                self.progress_bar.progress(progress)
-                self.status_text.info(f"🧠 **Agent:** {stage.capitalize()} started...")
-                self.completed_stages.add(stage)
+    def on_chain_start(self, serialized: Dict[str, Any], inputs: Dict[str, Any], **kwargs: Any) -> Any:
+        """Called when a main agent node starts. Sets the active agent."""
+        if not serialized:
+            return
 
+        messages = serialized.get("kwargs", {}).get("messages", [])
+        if not messages:
+            return
+
+        first_message = messages[0]
+        prompt_kwargs = first_message.get("kwargs", {})
+        prompt_template = prompt_kwargs.get("prompt", {}).get("kwargs", {}).get("template", "")
+
+        agent_name = None
+        if "expert financial researcher" in prompt_template.lower():
+            agent_name = "researcher"
+        elif "meticulous financial 'critic'" in prompt_template.lower():
+            agent_name = "critic"
+        elif "'refiner' agent" in prompt_template.lower():
+            agent_name = "refiner"
+        elif "note-taking assistant" in prompt_template.lower():
+            agent_name = "save_memory"
+
+        if agent_name and agent_name in self.stages and agent_name not in self.completed_stages:
+            self.active_agent = agent_name
+            progress = self.stages[agent_name]
+            self.progress_bar.progress(progress)
+            self.status_text.info(f"🧠 **Agent:** {agent_name.capitalize()} started...")
+            self.completed_stages.add(agent_name)
 
     def on_tool_start(self, serialized: Dict[str, Any], input_str: str, **kwargs: Any) -> Any:
-        """Called when a tool is about to be run. Provides granular updates for the status text only."""
+        """Called when a tool starts. Only provides updates if the researcher is active."""
+        if self.active_agent != "researcher":
+            return
         tool_name = serialized.get("name", "Unknown tool")
         tool_desc = TOOL_DESCRIPTIONS.get(tool_name, "a specific tool")
-        
-        # This provides the real-time feedback on which tool is being used
-        # It does NOT affect the main progress bar.
         self.status_text.info(f"🛠️ **Tool:** Using {tool_desc}...")
+
 
 # --- Helper Functions ---
 def display_memory(ticker: str):
@@ -375,7 +348,7 @@ def main():
                     status_placeholder.info("Workflow started!")
                     
                     progress_bar.progress(0)
-                    # --- NEW: Instantiate and use the callback handler ---
+                    # --- Instantiate and use the callback handler ---
                     streamlit_handler = StreamlitCallbackHandler(progress_bar, status_text_placeholder)
                     config = {"callbacks": [streamlit_handler]}
 
