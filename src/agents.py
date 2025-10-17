@@ -514,39 +514,37 @@ def get_news_analyst_agent(llm: ChatOpenAI):
     )
     return create_agent(llm, news_analyst_tools, news_analyst_prompt)
 
-def get_researcher_agent(llm: ChatOpenAI):
-    # 1. CREATE the specialist agent and wrap it in a Tool
-    news_analyst_agent = get_news_analyst_agent(llm)
+def get_news_analyst_agent(llm: ChatOpenAI):
+    """
+    Defines a specialist agent that performs a multi-step news analysis chain.
+    """
+    # This agent only needs one tool: the ability to get raw news headlines.
+    news_analyst_tools = [get_stock_news]
     
-    def run_news_agent(ticker: str):
-        return news_analyst_agent.invoke({"input": ticker})
-    
-    news_analysis_tool = Tool(
-        name="Financial_News_Analyst",
-        # The specialist agent's invoke method becomes the tool's function
-        func=run_news_agent,
-        description="Provides a comprehensive summary of the latest news sentiment for a given stock ticker. The input should be a dictionary with a single key 'input' and the value as the ticker symbol (e.g., {'input': 'AAPL'})."
+    # This detailed prompt IS the "Prompt Chain". It instructs the agent on the exact sequence of steps.
+    news_analyst_prompt = (
+        "You are an expert financial news analyst. Your goal is to produce a concise summary of the latest news sentiment.\n\n"
+        "Follow this exact multi-step process:\n"
+        "1. **Ingest:** First, use the `get_stock_news` tool to fetch the latest raw news headlines for the given stock ticker.\n"
+        "2. **Classify & Analyze:** Internally, classify the sentiment of each headline (Positive, Negative, Neutral) and identify the key topics being discussed (e.g., earnings, partnerships, market trends).\n"
+        "3. **Summarize:** Finally, synthesize your findings into a concise, 2-3 sentence summary that captures the overall sentiment and the most important news points.\n\n"
+        "Your final output MUST be only the summary paragraph. Do not output the list of headlines or your classification details."
     )
-   
-    researcher_tools = [
-        read_notes_from_memory, 
-        get_company_info, 
-        get_price_summary, 
-        news_analysis_tool, 
-        get_economic_data, 
-        get_latest_filings,
-        get_financial_ratios,
-        get_analyst_ratings,
-        get_google_trends,
-        search_specific_news
-    ]
+    return create_agent(llm, news_analyst_tools, news_analyst_prompt)
 
-    researcher_system_prompt = (
-        "You are an expert financial researcher. Your primary goal is to produce a detailed analysis by dynamically adapting your research strategy based on the company's Market Cap and Sector.\n\n"
-        "**Execution Plan:**\n"
-        "1.  **Consult Memory (MANDATORY FIRST STEP):** Always begin by using the `read_notes_from_memory` tool to gather historical context.\n"
-        "2.  **Fetch Company Info & Classify:** Use the `get_company_info` tool to get the company's market cap (`marketCapRaw`) and `sector`.\n"
-        "3.  **Dynamic Tool Selection:** Based on the market cap, you must follow one of the specific analysis plans below. Do not add tools not listed in the plan for your chosen category.\n\n"
+
+def get_planner_agent(llm: ChatOpenAI):
+    """
+    An agent that creates a research plan based on company profile.
+    It only decides WHICH tools to use, it does not execute them.
+    """
+    # This agent only needs one tool to do its job: get_company_info
+    planner_tools = [get_company_info]
+    
+    planner_system_prompt = (
+        "You are an expert financial planning agent. Your goal is to create a step-by-step research plan for a given company.\n\n"
+        "1.  First, use the `get_company_info` tool to determine the company's market cap and sector.\n"
+        "2.  Based on this information, select the appropriate tools from the following list that an executor agent should run: "
         "    --- MARKET CAP BASED PLANS ---\n\n"
         "    - **Penny Stock (<$50M):** Your scope is strictly limited. \n"
         "      **Required Tools:** `get_price_summary`, `Financial_News_Analyst`.\n"
@@ -567,11 +565,52 @@ def get_researcher_agent(llm: ChatOpenAI):
         "    - **Financials/Industrials:** Focus on balance sheet health, debt, and economic indicators like interest rates.\n"
         "    - **Consumer Cyclical/Defensive:** Focus on consumer sentiment and supply chain news.\n"
         "    - **Utilities/Energy/Real Estate:** Focus on debt, dividends, and interest rate sensitivity.\n\n"
+        "Your final output MUST be a single, valid JSON object with two keys:\n"
+        "1.  `reasoning`: A string containing your one-sentence explanation.\n"
+        "2.  `plan`: A JSON array of strings, where each string is the exact name of a tool to be executed.\n\n"
+    )
+    return create_agent(llm, planner_tools, planner_system_prompt)
 
-        "4.  **Synthesize Final Analysis:** After executing your chosen plan, combine all gathered information into a single, detailed analysis. This paragraph MUST be your final output.\n\n"
+
+def get_executor_agent(llm: ChatOpenAI):
+    """
+    An agent that executes a given research plan.
+    It takes a plan and calls the tools in that plan.
+    """
+    # The specialist news agent needs to be created here for the executor's tool list
+    news_analyst_agent = get_news_analyst_agent(llm)
+    def run_news_agent(ticker: str):
+        return news_analyst_agent.invoke({"input": ticker})
+    news_analysis_tool = Tool(
+        name="Financial_News_Analyst",
+        func=run_news_agent,
+        description="Provides a comprehensive summary of the latest news sentiment for a given stock ticker."
+    )
+
+    # This agent needs all the tools available for execution.
+    executor_tools = [
+        read_notes_from_memory,
+        get_price_summary, 
+        news_analysis_tool, 
+        get_economic_data, 
+        get_latest_filings,
+        get_financial_ratios,
+        get_analyst_ratings,
+        get_google_trends,
+        search_specific_news
+    ]
+
+    executor_system_prompt = (
+        "You are an expert financial research executor. Your goal is to execute a given plan precisely.\n\n"
+        "**Execution Protocol:**\n"
+        "1.  **MANDATORY FIRST STEP:** Always begin by using the `read_notes_from_memory` tool to gather historical context for the ticker. This is a non-negotiable first action.\n"
+        "2.  **Execute the Provided Plan:** After consulting memory, execute the tools listed in the user-provided plan, in the order they are given.\n\n"
+        "Do not deviate from the plan or add extra tools. Your job is to execute, not to plan."
+        "3.  **Synthesize Final Analysis:** After executing your chosen plan, combine all gathered information into a single, detailed analysis. This paragraph MUST be your final output.\n\n"
         "**Formatting Instructions:** Do not output markdown. Ensure your final output is a well-formatted, readable paragraph."
     )
-    return create_agent(llm, researcher_tools, researcher_system_prompt)
+    return create_agent(llm, executor_tools, executor_system_prompt)
+
 
 def get_critic_agent(llm: ChatOpenAI):
     critic_prompt = ChatPromptTemplate.from_template(

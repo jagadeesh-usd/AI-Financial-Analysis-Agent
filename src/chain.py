@@ -3,12 +3,15 @@ from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import StateGraph, END
 from typing import TypedDict, Annotated, List
 import operator
-from src.agents import get_researcher_agent, get_critic_agent, get_refiner_agent, save_note_to_memory
+from src.agents import get_planner_agent, get_executor_agent, get_critic_agent, get_refiner_agent, save_note_to_memory
 import streamlit as st
+import json
 
 # --- Agent State ---
 class AgentState(TypedDict):
     ticker: str
+    plan: List[str] 
+    reasoning: str
     research_steps: Annotated[List[dict], operator.add]
     initial_analysis: str
     critique: str
@@ -16,10 +19,27 @@ class AgentState(TypedDict):
     memory_confirmation: str
 
 # --- Agent Nodes ---
-def researcher_node(state):
-    """Researches and provides the initial analysis."""
-    researcher_agent = get_researcher_agent(ChatOpenAI(model="gpt-4.1-mini", temperature=0))
-    result = researcher_agent.invoke({"input": f"Analyze the stock {state['ticker']}"})
+def planner_node(state):
+    """Generates the research plan and reasoning."""
+    planner_agent = get_planner_agent(ChatOpenAI(model="gpt-4o-mini", temperature=0))
+    # The agent now returns a JSON string
+    result_json_string = planner_agent.invoke({"input": f"Create a plan for {state['ticker']}"})['output']
+    
+    # Parse the JSON string into a Python dictionary
+    plan_data = json.loads(result_json_string)
+    
+    return {
+        "reasoning": plan_data["reasoning"],
+        "plan": plan_data["plan"]
+    }
+
+def executor_node(state):
+    """Executes the research plan."""
+    executor_agent = get_executor_agent(ChatOpenAI(model="gpt-4o-mini", temperature=0))
+    # Pass both the plan and the ticker to the executor
+    result = executor_agent.invoke({
+        "input": f"Execute the following plan for the ticker {state['ticker']}:\n\nPLAN: {state['plan']}"
+    })
     return {"research_steps": result['intermediate_steps'], "initial_analysis": result['output']}
 
 def critic_node(state):
@@ -65,15 +85,17 @@ def save_memory_node(state):
 def build_agentic_workflow():
     workflow = StateGraph(AgentState)
 
-    # Add nodes
-    workflow.add_node("researcher", researcher_node)
+    # Add the new nodes
+    workflow.add_node("planner", planner_node)
+    workflow.add_node("executor", executor_node)
     workflow.add_node("critic", critic_node)
     workflow.add_node("refiner", refiner_node)
     workflow.add_node("save_memory", save_memory_node)
 
-    # Define edges
-    workflow.set_entry_point("researcher")
-    workflow.add_edge("researcher", "critic")
+    # Define the new sequence of edges
+    workflow.set_entry_point("planner")
+    workflow.add_edge("planner", "executor")
+    workflow.add_edge("executor", "critic")
     workflow.add_edge("critic", "refiner")
     workflow.add_edge("refiner", "save_memory")
     workflow.add_edge("save_memory", END)

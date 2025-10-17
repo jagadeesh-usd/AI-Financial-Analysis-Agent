@@ -122,14 +122,19 @@ TOOL_DESCRIPTIONS = {
 
 
 class StreamlitCallbackHandler(BaseCallbackHandler):
-    """A stateful callback handler that correctly attributes events to the active agent."""
+    """A stateful callback handler that correctly attributes events to the active agent,
+    supporting the new planner/executor workflow."""
+
     def __init__(self, progress_bar, status_text_placeholder):
         self.progress_bar = progress_bar
         self.status_text = status_text_placeholder
+        
+        # MODIFIED: Redefined stages for the new 5-step workflow
         self.stages = {
-            "researcher": 25,
-            "critic": 50,
-            "refiner": 75,
+            "planner": 20,
+            "executor": 40,
+            "critic": 60,
+            "refiner": 80,
             "save_memory": 100
         }
         self.completed_stages = set()
@@ -140,6 +145,7 @@ class StreamlitCallbackHandler(BaseCallbackHandler):
         if not serialized:
             return
 
+        # This logic for digging into the prompt remains the same
         messages = serialized.get("kwargs", {}).get("messages", [])
         if not messages:
             return
@@ -149,8 +155,11 @@ class StreamlitCallbackHandler(BaseCallbackHandler):
         prompt_template = prompt_kwargs.get("prompt", {}).get("kwargs", {}).get("template", "")
 
         agent_name = None
-        if "expert financial researcher" in prompt_template.lower():
-            agent_name = "researcher"
+        # MODIFIED: Updated the keyword matching for the new agents
+        if "expert financial planning agent" in prompt_template.lower():
+            agent_name = "planner"
+        elif "expert financial research execution agent" in prompt_template.lower():
+            agent_name = "executor"
         elif "meticulous financial 'critic'" in prompt_template.lower():
             agent_name = "critic"
         elif "'refiner' agent" in prompt_template.lower():
@@ -158,6 +167,7 @@ class StreamlitCallbackHandler(BaseCallbackHandler):
         elif "note-taking assistant" in prompt_template.lower():
             agent_name = "save_memory"
 
+        # This logic for updating the UI remains the same
         if agent_name and agent_name in self.stages and agent_name not in self.completed_stages:
             self.active_agent = agent_name
             progress = self.stages[agent_name]
@@ -166,13 +176,14 @@ class StreamlitCallbackHandler(BaseCallbackHandler):
             self.completed_stages.add(agent_name)
 
     def on_tool_start(self, serialized: Dict[str, Any], input_str: str, **kwargs: Any) -> Any:
-        """Called when a tool starts. Only provides updates if the researcher is active."""
-        if self.active_agent != "researcher":
+        """Called when a tool starts. Only provides updates if the planner or executor is active."""
+        # MODIFIED: Allow tool reports for both planner and executor
+        if self.active_agent not in ["planner", "executor"]:
             return
+            
         tool_name = serialized.get("name", "Unknown tool")
         tool_desc = TOOL_DESCRIPTIONS.get(tool_name, "a specific tool")
         self.status_text.info(f"🛠️ **Tool:** Using {tool_desc}...")
-
 
 # --- Helper Functions ---
 def display_memory(ticker: str):
@@ -355,10 +366,12 @@ def main():
                     st.latex(r'''\cdots''')
 
                     with st.expander("##### Researcher's Plan", expanded=True):
+                        reason_placeholder = st.empty()
                         plan_placeholder = st.empty() # A single placeholder for the entire plan
                     chosen_tools = [] # A list to track the tools the agent decides to use
                     
                     with st.expander("##### Workflow Agents", expanded=True):
+                        plan_status_placeholder = st.empty()
                         research_status_placeholder = st.empty()
                         critic_status_placeholder = st.empty()
                         refine_status_placeholder = st.empty()
@@ -373,59 +386,57 @@ def main():
                 final_analysis = "Analysis could not be generated."
                 memory_confirmation = "Key insights will be saved upon completion."
 
+                # --- MODIFIED: Updated event handling loop ---
                 for event in agent_workflow.stream(inputs, config=config):
                     for key, value in event.items():
-                        if key == "researcher":
+                        # --- NEW: Handle the 'planner' node ---
+                        if key == "planner":
+                            plan_status_placeholder.info("🕵️‍♂️ **Planner Agent:** Creating research plan...")
+                            reasoning = value.get('reasoning', 'No reasoning generated.')
+                            plan_list = value.get('plan', 'No plan generated.')
+                            # Format the plan for display in the sidebar
+                            reason_placeholder.markdown(reasoning)
+                            plan_list = [f"{i+1}. {tool.strip()}" for i, tool in enumerate(plan_list)]
+                            plan_placeholder.markdown("\n".join(plan_list))
+                            plan_status_placeholder.success("🕵️‍♂️ **Planner Agent:** Creating research plan complete.")
+                            research_status_placeholder.info("🛠️ **Executor Agent:** Executing research plan...")
+
+                        # --- NEW: Handle the 'executor' node (replaces the old 'researcher' logic) ---
+                        elif key == "executor":
+                            # research_status_placeholder.info("🛠️ **Executor Agent:** Executing research plan...")
+                            
                             intermediate_steps = value.get('research_steps', [])
-
-                            chosen_tools = [] 
-                            if intermediate_steps:
-                                # Loop through ALL tool calls in the event, not just the last one
-                                for step in intermediate_steps:
-                                    action = step[0] # The first element is the AgentAction
-                                    tool_name = action.tool
-                                    if tool_name in TOOL_DESCRIPTIONS:
-                                        tool_desc = TOOL_DESCRIPTIONS[tool_name]
-                                        if tool_desc not in chosen_tools:
-                                            chosen_tools.append(tool_desc)
                             
-                            # Update the sidebar placeholder with the complete, ordered plan
-                            if chosen_tools:
-                                plan_markdown = ""
-                                for i, tool in enumerate(chosen_tools):
-                                    plan_markdown += f"{i+1}. {tool}\n"
-                                plan_placeholder.markdown(plan_markdown)
-
-                            research_status_placeholder.info("🕵️‍♂️ **Researcher Agent:** Executing research...")
+                            # Parse tool outputs and save to session state (this logic is the same as before)
+                            st.session_state['company_info'] = next((obs for act, obs in intermediate_steps if act.tool == "get_company_info"), None)
+                            st.session_state['price_summary']  = next((obs for act, obs in intermediate_steps if act.tool == "get_price_summary"), None)
+                            st.session_state['news_summary_output'] = next((obs for act, obs in intermediate_steps if act.tool == "Financial_News_Analyst"), None)
+                            st.session_state['filings_data'] = next((obs for act, obs in intermediate_steps if act.tool == "get_latest_filings"), [])
                             
+                            if "initial_analysis" in value:
+                                st.session_state['initial_analysis'] = value["initial_analysis"]
+
+                            # This temporary expander can still be used for debugging during the run
                             with research_placeholder.expander("🔬 Research Trail", expanded=False):
-                                
-                                intermediate_steps = value.get('research_steps', [])
-                                
-                                st.session_state['company_info'] = next((obs for act, obs in intermediate_steps if act.tool == "get_company_info"), None)
-                                st.session_state['price_summary']  = next((obs for act, obs in intermediate_steps if act.tool == "get_price_summary"), None)
-                                st.session_state['news_summary_output'] = next((obs for act, obs in intermediate_steps if act.tool == "Financial_News_Analyst"), None)
-                                st.session_state['filings_data'] = next((obs for act, obs in intermediate_steps if act.tool == "get_latest_filings"), [])
-                                
-                                if "initial_analysis" in value:
-                                    st.session_state['initial_analysis'] = value["initial_analysis"]
-
                                 display_research_details(
-                                    st.session_state['company_info'],
-                                    st.session_state['price_summary'],
-                                    st.session_state['news_summary_output'],
-                                    st.session_state['filings_data'],
-                                    st.session_state['initial_analysis']
-                                    )
+                                    st.session_state.get('company_info'),
+                                    st.session_state.get('price_summary'),
+                                    st.session_state.get('news_summary_output'),
+                                    st.session_state.get('filings_data'),
+                                    st.session_state.get('initial_analysis')
+                                )
+                            # Signal completion of the execution phase
+                            research_status_placeholder.success("🛠️ **Execution Agent:** Research complete.")
 
+                        # --- MODIFIED: Handle 'critic' node after executor ---
                         elif key == "critic":
-                            research_status_placeholder.success("🕵️‍♂️ **Researcher Agent:** Research complete.")
                             critic_status_placeholder.warning("🧐 **Critic Agent:** Evaluating the initial analysis...")
                             if "critique" in value:
                                 st.session_state['critique'] = value["critique"]
-                                with critic_placeholder.expander('🧐 critique'):
+                                with critic_placeholder.expander('🧐 critique', expanded=False):
                                     st.markdown(st.session_state['critique'])
 
+                        # --- Refiner and Save Memory (no changes here) ---
                         elif key == "refiner":
                             critic_status_placeholder.success("🧐 **Critic Agent:** Evaluation complete.")
                             refine_status_placeholder.info("✍️ **Refiner Agent:** Rewriting analysis...")
@@ -434,13 +445,11 @@ def main():
                         
                         elif key == "save_memory":
                             refine_status_placeholder.success("✍️ **Refiner Agent:** Analysis rewritten.")
-                            # memory_status_placeholder.info("💾 **Memory Agent:** Saving key insights...")
-                        
                             if "memory_confirmation" in value:
                                 memory_confirmation = value["memory_confirmation"]
 
-                progress_bar.progress(100)
                 status_placeholder.success("Workflow Complete!")
+                progress_bar.progress(100) # Ensure it finishes at 100
 
             with final_flex_placeholder.container(horizontal=True, height="content", horizontal_alignment="right"):
                 with st.popover('🔬 Research Trail'):
