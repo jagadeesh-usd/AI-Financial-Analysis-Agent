@@ -129,7 +129,7 @@ class StreamlitCallbackHandler(BaseCallbackHandler):
         self.progress_bar = progress_bar
         self.status_text = status_text_placeholder
         
-        # MODIFIED: Redefined stages for the new 5-step workflow
+        # Redefined stages for the new 5-step workflow
         self.stages = {
             "planner": 20,
             "executor": 40,
@@ -248,21 +248,82 @@ def display_stock_snapshot(company_info, price_summary):
     st.markdown(f"**Trend:** {trend_conclusion} | **Momentum:** {rsi_condition}")
 
 
-def display_research_details(company_info, price_summary, news_summary, filings_data, initial_analysis):
+def display_research_details(
+        reasoning, 
+        plan_list,
+        company_info, 
+        price_summary, 
+        news_summary, 
+        filings_data, 
+        initial_analysis,
+        financial_ratios, 
+        analyst_ratings, 
+        google_trends, 
+        economic_data, 
+        specific_news
+        ):
     """
     Renders the detailed research findings, starting with a visual snapshot
     and followed by deeper insights.
     """
     
-    # --- 1. Display the Visual Stock Snapshot first ---
+    # --- Display Researcher's Plan ---
+    if reasoning and plan_list:
+        with st.container():
+            st.markdown("##### 🕵️‍♂️ Researcher's Plan")
+            st.markdown(reasoning)
+            # Format the plan with arrows for better visualization
+            formatted_plan = [f"➡️ {tool.strip()}" for tool in plan_list]
+            st.markdown("\n".join(formatted_plan))
+
+    # --- Display the Visual Stock Snapshot first ---
     display_stock_snapshot(company_info, price_summary)
-        
-    # --- 2. Display Deeper Insights ---
+
+    # --- Display Deeper Insights ---
     if news_summary:
         with st.container():
             st.markdown("##### News Sentiment Summary")
             summary_text = news_summary.get('output', 'No summary provided.')
             st.info(summary_text.replace('$', '\\$'))
+            
+    # --- Display Financial Ratios ---
+    if financial_ratios and not financial_ratios.get("error"):
+        with st.container():
+            st.markdown("##### Financial Ratios")
+            for key, value in financial_ratios.items():
+                st.write(f"**{key.replace('_', ' ').title()}:** {value}")
+
+    # --- Display Analyst Ratings ---
+    if analyst_ratings and not analyst_ratings.get("error"):
+        with st.container():
+            st.markdown("##### Analyst Ratings")
+            st.metric(label="Buy Ratings", value=analyst_ratings.get('buy_ratings', 0))
+            st.metric(label="Hold Ratings", value=analyst_ratings.get('hold_ratings', 0))
+            st.metric(label="Sell Ratings", value=analyst_ratings.get('sell_ratings', 0))
+
+    # --- Display Google Trends ---
+    if google_trends and not google_trends.get("error"):
+        with st.container():
+            st.markdown("##### Public Interest (Google Trends)")
+            st.write(f"**Keyword:** {google_trends.get('keyword')}")
+            st.write(f"**Average Interest Score:** {google_trends.get('average_interest_score')}/100")
+            st.write(f"**Peak Interest Date:** {google_trends.get('peak_interest_date')}")
+
+    # --- Display Economic Data ---
+    if economic_data and not economic_data.get("error"):
+        with st.container():
+            st.markdown("##### Economic Context")
+            st.write(f"**Series:** {economic_data.get('series')}")
+            st.write(f"**Latest Value:** {economic_data.get('latest_value').replace('$', '\\$')}")
+            st.write(f"**Date:** {economic_data.get('latest_date')}")
+            
+    # --- Display Specific News Search Results ---
+    if specific_news and isinstance(specific_news, list):
+         with st.container():
+            st.markdown("##### Targeted News Search")
+            for headline in specific_news:
+                frmt_headline = headline.replace('$', '\\$')
+                st.write(f"- {frmt_headline}")
 
     if filings_data and isinstance(filings_data, list) and not pd.DataFrame(filings_data).empty:
         with st.container():
@@ -386,32 +447,33 @@ def main():
                 final_analysis = "Analysis could not be generated."
                 memory_confirmation = "Key insights will be saved upon completion."
 
-                # --- MODIFIED: Updated event handling loop ---
                 for event in agent_workflow.stream(inputs, config=config):
                     for key, value in event.items():
                         # --- NEW: Handle the 'planner' node ---
                         if key == "planner":
                             plan_status_placeholder.info("🕵️‍♂️ **Planner Agent:** Creating research plan...")
-                            reasoning = value.get('reasoning', 'No reasoning generated.')
-                            plan_list = value.get('plan', 'No plan generated.')
+                            st.session_state['reasoning'] = value.get('reasoning', 'No reasoning generated.')
+                            st.session_state['plan_list']  = value.get('plan', 'No plan generated.')
+                            st.session_state['company_info'] = value.get('company_info', 'No company info generated.')
                             # Format the plan for display in the sidebar
-                            reason_placeholder.markdown(reasoning)
-                            plan_list = [f"{i+1}. {tool.strip()}" for i, tool in enumerate(plan_list)]
+                            reason_placeholder.markdown(st.session_state['reasoning'])
+                            plan_list = [f"{i+1}. {tool.strip()}" for i, tool in enumerate(st.session_state['plan_list'])]
                             plan_placeholder.markdown("\n".join(plan_list))
                             plan_status_placeholder.success("🕵️‍♂️ **Planner Agent:** Creating research plan complete.")
                             research_status_placeholder.info("🛠️ **Executor Agent:** Executing research plan...")
 
-                        # --- NEW: Handle the 'executor' node (replaces the old 'researcher' logic) ---
-                        elif key == "executor":
-                            # research_status_placeholder.info("🛠️ **Executor Agent:** Executing research plan...")
-                            
+                        elif key == "executor":                            
                             intermediate_steps = value.get('research_steps', [])
                             
-                            # Parse tool outputs and save to session state (this logic is the same as before)
-                            st.session_state['company_info'] = next((obs for act, obs in intermediate_steps if act.tool == "get_company_info"), None)
+                            # Parse tool outputs and save to session state
                             st.session_state['price_summary']  = next((obs for act, obs in intermediate_steps if act.tool == "get_price_summary"), None)
                             st.session_state['news_summary_output'] = next((obs for act, obs in intermediate_steps if act.tool == "Financial_News_Analyst"), None)
                             st.session_state['filings_data'] = next((obs for act, obs in intermediate_steps if act.tool == "get_latest_filings"), [])
+                            st.session_state['financial_ratios'] = next((obs for act, obs in intermediate_steps if act.tool == "get_financial_ratios"), None)
+                            st.session_state['analyst_ratings'] = next((obs for act, obs in intermediate_steps if act.tool == "get_analyst_ratings"), None)
+                            st.session_state['google_trends'] = next((obs for act, obs in intermediate_steps if act.tool == "get_google_trends"), None)
+                            st.session_state['economic_data'] = next((obs for act, obs in intermediate_steps if act.tool == "get_economic_data"), None)
+                            st.session_state['specific_news'] = next((obs for act, obs in intermediate_steps if act.tool == "search_specific_news"), None)
                             
                             if "initial_analysis" in value:
                                 st.session_state['initial_analysis'] = value["initial_analysis"]
@@ -419,16 +481,23 @@ def main():
                             # This temporary expander can still be used for debugging during the run
                             with research_placeholder.expander("🔬 Research Trail", expanded=False):
                                 display_research_details(
+                                    st.session_state.get('reasoning'),
+                                    st.session_state.get('plan_list'),
                                     st.session_state.get('company_info'),
                                     st.session_state.get('price_summary'),
                                     st.session_state.get('news_summary_output'),
                                     st.session_state.get('filings_data'),
-                                    st.session_state.get('initial_analysis')
+                                    st.session_state.get('initial_analysis'),
+                                    st.session_state.get('financial_ratios'),
+                                    st.session_state.get('analyst_ratings'),
+                                    st.session_state.get('google_trends'),
+                                    st.session_state.get('economic_data'),
+                                    st.session_state.get('specific_news')
                                 )
                             # Signal completion of the execution phase
                             research_status_placeholder.success("🛠️ **Execution Agent:** Research complete.")
 
-                        # --- MODIFIED: Handle 'critic' node after executor ---
+                        # --- Handle 'critic' node after executor ---
                         elif key == "critic":
                             critic_status_placeholder.warning("🧐 **Critic Agent:** Evaluating the initial analysis...")
                             if "critique" in value:
@@ -449,16 +518,23 @@ def main():
                                 memory_confirmation = value["memory_confirmation"]
 
                 status_placeholder.success("Workflow Complete!")
-                progress_bar.progress(100) # Ensure it finishes at 100
+                progress_bar.progress(100) 
 
             with final_flex_placeholder.container(horizontal=True, height="content", horizontal_alignment="right"):
                 with st.popover('🔬 Research Trail'):
                     display_research_details(
-                                    st.session_state['company_info'],
-                                    st.session_state['price_summary'],
-                                    st.session_state['news_summary_output'],
-                                    st.session_state['filings_data'],
-                                    st.session_state['initial_analysis']
+                                    st.session_state.get('reasoning'),
+                                    st.session_state.get('plan_list'),
+                                    st.session_state.get('company_info'),
+                                    st.session_state.get('price_summary'),
+                                    st.session_state.get('news_summary_output'),
+                                    st.session_state.get('filings_data'),
+                                    st.session_state.get('initial_analysis'),
+                                    st.session_state.get('financial_ratios'),
+                                    st.session_state.get('analyst_ratings'),
+                                    st.session_state.get('google_trends'),
+                                    st.session_state.get('economic_data'),
+                                    st.session_state.get('specific_news')
                                     )
                 if st.session_state['critique']:
                     with st.popover('🧐 Critique'):
