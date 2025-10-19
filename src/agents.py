@@ -1,4 +1,5 @@
 import yfinance as yf
+import pands as pd
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import tool
 from langchain.tools import Tool
@@ -184,7 +185,7 @@ def get_price_summary(ticker: str) -> dict:
             return {"error": "Could not retrieve price history."}
 
         # --- Key Price Points ---
-        latest_close = hist['Close'][-1]
+        latest_close = hist['Close'].iloc[-1]
         fifty_two_week_high = hist['High'].max()
         fifty_two_week_low = hist['Low'].min()
 
@@ -270,26 +271,42 @@ def get_analyst_ratings(ticker: str) -> dict:
     """
     try:
         stock = yf.Ticker(ticker)
-        recommendations = stock.recommendations
-        
+        # Use recommendations_summary which is often more consistent
+        recommendations = stock.recommendations_summary
+
         if recommendations.empty:
             return {"message": "No analyst ratings found for this period."}
             
-        # Get the most recent ratings
-        latest_ratings = recommendations.tail(5)
-        
-        # Summarize ratings
-        rating_counts = recommendations['strongBuy'].count() + recommendations['buy'].count()
-        hold_counts = recommendations['hold'].count()
-        sell_counts = recommendations['sell'].count() + recommendations['strongSell'].count()
+        # The data is often in a single row, so we access it directly.
+        latest_summary = recommendations.iloc[0]
+
+        # Use .get() to safely access keys that might be missing
+        strong_buy = latest_summary.get('strongBuy', 0)
+        buy = latest_summary.get('buy', 0)
+        hold = latest_summary.get('hold', 0)
+        sell = latest_summary.get('sell', 0)
+        strong_sell = latest_summary.get('strongSell', 0)
 
         summary = {
-            "period": recommendations.index.max().strftime('%Y-%m'),
-            "buy_ratings": int(rating_counts),
-            "hold_ratings": int(hold_counts),
-            "sell_ratings": int(sell_counts),
-            "latest_recommendations": latest_ratings[['firm', 'toGrade']].to_dict('records')
+            "period": latest_summary.get('period', 'N/A'),
+            "buy_ratings": int(strong_buy + buy),
+            "hold_ratings": int(hold),
+            "sell_ratings": int(sell + strong_sell)
         }
+        
+        # Get the latest specific recommendations if available
+        rec_details = stock.recommendations
+        if not rec_details.empty:
+            latest_ratings = rec_details.tail(5)
+            firm_col = 'Firm' if 'Firm' in latest_ratings.columns else 'firm'
+            grade_col = 'To Grade' if 'To Grade' in latest_ratings.columns else 'toGrade'
+            if firm_col in latest_ratings.columns and grade_col in latest_ratings.columns:
+                 summary["latest_recommendations"] = latest_ratings[[firm_col, grade_col]].to_dict('records')
+            else:
+                summary["latest_recommendations"] = []
+        else:
+            summary["latest_recommendations"] = []
+            
         return summary
     except Exception as e:
         return {"error": f"Could not retrieve analyst ratings: {e}"}
@@ -566,7 +583,7 @@ def get_planner_agent(llm: ChatOpenAI):
         "    - **Consumer Cyclical/Defensive:** Focus on consumer sentiment and supply chain news.\n"
         "    - **Utilities/Energy/Real Estate:** Focus on debt, dividends, and interest rate sensitivity.\n\n"
         "Your final output MUST be a single, valid JSON object with two keys:\n"
-        "1.  `reasoning`: A string containing your one-sentence explanation.\n"
+        "1.  `reasoning`: A text containing your reason to choose all these tools and what to achieve in couple of lines.\n"
         "2.  `plan`: A JSON array of strings, where each string is the exact name of a tool to be executed.\n\n"
     )
     return create_agent(llm, planner_tools, planner_system_prompt)

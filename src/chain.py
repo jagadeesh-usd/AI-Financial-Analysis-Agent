@@ -21,7 +21,7 @@ class AgentState(TypedDict):
 # --- Agent Nodes ---
 def planner_node(state):
     """Generates the research plan and reasoning."""
-    planner_agent = get_planner_agent(ChatOpenAI(model="gpt-4o-mini", temperature=0))
+    planner_agent = get_planner_agent(ChatOpenAI(model="gpt-4.1-mini", temperature=0))
     # The agent now returns a JSON string
     result_json_string = planner_agent.invoke({"input": f"Create a plan for {state['ticker']}"})['output']
     
@@ -35,7 +35,7 @@ def planner_node(state):
 
 def executor_node(state):
     """Executes the research plan."""
-    executor_agent = get_executor_agent(ChatOpenAI(model="gpt-4o-mini", temperature=0))
+    executor_agent = get_executor_agent(ChatOpenAI(model="gpt-4.1-mini", temperature=0))
     # Pass both the plan and the ticker to the executor
     result = executor_agent.invoke({
         "input": f"Execute the following plan for the ticker {state['ticker']}:\n\nPLAN: {state['plan']}"
