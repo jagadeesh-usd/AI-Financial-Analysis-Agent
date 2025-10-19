@@ -1,5 +1,5 @@
 import yfinance as yf
-import pands as pd
+import pandas as pd
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import tool
 from langchain.tools import Tool
@@ -357,27 +357,6 @@ def get_economic_data(series_id: str = 'GDP') -> dict:
         }
     except Exception as e:
         return {"error": f"Failed to fetch data for series {series_id}: {e}"}
-
-def clean_filing_content(text):
-    """
-    Clean the extracted filing content by removing XBRL/inline tags and normalizing whitespace.
-    """
-    # Remove all XBRL/inline tags (e.g., xbrli:shares, iso4217:USD, us-gaap:*, etc.)
-    text = re.sub(r'\b(xbrli|us-gaap|dei|srt|aapl|intc):[^\s>]+', '', text)
-
-    # Remove standalone tags like "P1Y", "c-1", "f-46", etc.
-    text = re.sub(r'\b([A-Za-z]+-[0-9]+|[A-Za-z]+[0-9]+|[A-Z]{2,}[A-Za-z]*\d*)\b', '', text)
-
-    # Remove dates in the format "YYYY-MM-DD" if they are standalone
-    text = re.sub(r'(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)', '', text)
-
-    # Remove numbers like "0000050863" if they are standalone
-    text = re.sub(r'(?<!\d)\d{8,}(?!\d)', '', text)
-
-    # Remove extra whitespace and newlines
-    text = re.sub(r'\s+', ' ', text).strip()
-
-    return text
 
 @tool
 def get_latest_filings(ticker: str, top_n: int = 1) -> list[dict]:

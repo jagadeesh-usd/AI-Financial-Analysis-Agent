@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # 📈 AI-Powered Multi-Agent Financial Analysis System
 
 This repository contains the complete source code and documentation for a **real-world financial analysis system powered by agentic AI**.  
@@ -173,5 +172,3 @@ All AI-generated content was reviewed, validated, and refined by the team to ens
 📚 License
 
 This project is distributed for educational and research purposes.
-Please include proper attribution if reusing or extending this work.
->>>>>>> jag-dev
