@@ -1,7 +1,6 @@
 # 📈 AI-Powered Multi-Agent Financial Analysis System
 
-This repository contains the complete source code and documentation for a **real-world financial analysis system powered by agentic AI**.  
-Built with **Python**, **Streamlit**, and the **LangChain framework**, this project demonstrates how multiple specialized AI agents can collaborate to reason, plan, act, and iteratively improve complex financial research tasks.
+This repository contains the source code and documentation for a **multi-agent financial analysis system** built for the AAI-520 Final Team Project. Implemented in a **Jupyter Notebook** using **Python**, **LangChain**, and **LangGraph**, the system demonstrates how specialized AI agents collaborate to perform complex financial research tasks end-to-end.
 
 ---
 
@@ -19,157 +18,151 @@ Built with **Python**, **Streamlit**, and the **LangChain framework**, this proj
 
 ---
 
-## 🧠 Project Overview
+## Project Overview
 
-The application features a **lead Researcher Agent** that dynamically uses a suite of tools to gather data on a given stock ticker.  
-Its findings are passed through a **LangGraph workflow** where a **Critic Agent** evaluates the analysis and a **Refiner Agent** improves it — demonstrating a complete _"reason → critique → improve"_ loop.  
-
-The system also “learns” by saving key insights to a local memory, which it consults in future analyses to provide more **context-aware insights**.
+The system features a **lead Researcher Agent** that dynamically uses tools to gather data for a given stock ticker (e.g., INTC). The analysis is processed through a **LangGraph workflow** involving a **Planner Agent** (creates research plans), **Executor Agent** (collects data), **Critic Agent** (evaluates output), and **Refiner Agent** (improves the report). A **Memory component** saves key insights to provide context-aware analyses in future runs.
 
 ---
+
+## Data Sources & APIs
 
 ## 🌐 Data Sources & APIs
 
-The agent gathers data from multiple real-world sources for comprehensive financial insight:
+The system integrates multiple real-world data sources and APIs for comprehensive financial insights. These are accessed via specialized tools in the agents, enabling dynamic data retrieval based on company profile (e.g., market cap, sector). Key sources include:
 
-| Source | Purpose |
-|---------|----------|
-| **Yahoo Finance (yfinance)** | Stock prices, company information, and latest news |
-| **Federal Reserve Economic Data (fredapi)** | Macroeconomic indicators (e.g., GDP, unemployment) |
-| **SEC EDGAR (edgar)** | Official company filings (10-K, 10-Q) |
+| Source/API | Library | Purpose & Details |
+|------------|---------|-------------------|
+| **Yahoo Finance** | `yfinance` | Stock prices (current, historical), company information (e.g., name, market cap, sector), news headlines, financial ratios (e.g., P/E, price-to-book, debt-to-equity, ROE, profit margins), analyst ratings (buy/hold/sell consensus, price targets), and technical indicators (e.g., 52-week range, 50/200-day MAs, 14-day RSI for trend/momentum analysis). Used for core financial and market data. |
+| **Federal Reserve Economic Data (FRED)** | `fredapi` | Macroeconomic indicators (e.g., GDP, unemployment rates, CPI, interest rates). Fetches time-series data for contextual economic analysis, especially for mid/large-cap companies. Requires a free API key from fred.stlouisfed.org. |
+| **SEC EDGAR** | `edgartools` | Official company filings (e.g., 10-K annual reports, 10-Q quarterly reports). Retrieves and cleans recent filings (last 3 years) for insights into financial health, risks, and operations. Cleans XBRL tags and normalizes text for readability. Requires setting a user agent for compliance. |
+| **NewsAPI** | `requests` (via API) | Targeted news searches for sentiment and events, focusing on the last 30 days with keywords (e.g., 'partnerships', 'acquisitions', 'product launch'). Returns top headlines for specific topics, integrated into news analysis. Requires a free API key from newsapi.org. |
+| **Google Trends** | `pytrends` | Public interest trends for keywords (e.g., company name over the last 3 months). Provides average interest scores (0-100), peak dates, and related queries. Useful for consumer-facing sectors to gauge brand sentiment and popularity. No API key required. |
+
+These sources enable multi-faceted analysis, from quantitative metrics (e.g., ratios, prices) to qualitative insights (e.g., news sentiment, filings). Tools dynamically select sources based on the research plan.
 
 ---
 
-## 🧩 Project Structure
+## Project Structure
+
 ```bash
 AI-Financial-Analysis-Agent/
 │
-├── .streamlit/
-│   └── secrets.toml        # API Keys and secrets (not committed)
-│
-├── src/
-│   ├── agents.py           # Defines all agent tools and prompts
-│   └── chain.py            # Builds the LangGraph workflow
-│
-├── app.py                  # Main Streamlit UI and application logic
+├── project_notebook.ipynb  # Main Jupyter Notebook with code and documentation
 ├── requirements.txt        # Python dependencies
 ├── memory.json             # Agent’s persistent memory (created on first run)
 └── README.md               # Project documentation
 ```
----
-
-## 💼 Business Understanding
-
-Traditional financial analysis pipelines are often rigid and require significant manual intervention.  
-**Agentic AI** represents a paradigm shift — enabling systems that can autonomously plan research, integrate diverse data sources in real-time, and even **critique their own outputs** to improve quality.  
-
-This project demonstrates a **practical and scalable application** of this technology for investment research, capable of delivering nuanced insights faster and more efficiently.
 
 ---
 
-## 🧮 Methodology
+## Business Understanding
 
-### 🧩 1. Agentic Planning & Research
-The **Researcher Agent** receives a stock ticker and autonomously plans its research steps based on a predefined, sequential strategy.
+Traditional financial analysis relies on rigid pipelines and manual effort. **Agentic AI** enables autonomous systems to plan research, integrate diverse data, and self-critique for improved accuracy. This project delivers a scalable solution for investment research, producing nuanced, context-aware reports faster than manual methods.
+
+---
+
+## Methodology
+
+### 🧩 1. Agentic Planning
+The **Planner Agent** uses `get_company_info` (yfinance) to assess a company’s profile (e.g., market cap, sector) and generates a tailored research plan (JSON array of tools).
 
 ### 🌍 2. Multi-Source Data Gathering
-The agent dynamically uses its suite of tools to fetch:
-- Real-time stock data and news (Yahoo Finance)
-- Macroeconomic data (FRED)
-- Official filings (SEC EDGAR)
+The **Executor Agent** follows the plan, calling tools like:
+- `get_stock_news` and `search_specific_news` for news sentiment.
+- `get_price_summary` for price trends and technicals (yfinance).
+- `clean_filing_content` for EDGAR filings.
+- `read_notes_from_memory` for historical context.
 
 ### 🧠 3. Self-Critique & Refinement
-The **Critic Agent** evaluates the initial report for balance, clarity, and completeness.  
-The **Refiner Agent** then rewrites the report based on feedback to produce an improved final version.
+The **Critic Agent** evaluates the initial report for balance and completeness. The **Refiner Agent** revises it based on feedback, producing a polished output.
 
 ### 💾 4. Agentic Memory & Learning
-The final step saves a **key one-sentence insight** to a persistent `memory.json` file.  
-This allows the agent to _“remember”_ past analyses and provide richer context on subsequent runs.
+The system saves a one-sentence insight to `memory.json` (e.g., "[2025-10-19] - Intel’s AI pivot is promising but profitability remains a concern") for future context, retaining the last three entries per ticker.
 
 ---
 
-## ⚙️ How to Run
+## How to Run
 
-Follow these steps to set up and run the project locally:
+To run the notebook locally:
 
-```bash
-1️⃣ Clone the Repository
+1. **Clone the Repository**:
+   ```bash
+   git clone https://github.com/jagadeesh-usd/AI-Financial-Analysis-Agent.git
+   cd AI-Financial-Analysis-Agent
+   ```
 
-git clone https://github.com/jagadeesh-usd/AI-Financial-Analysis-Agent.git
-cd AI-Financial-Analysis-Agent
+2. **Create and Activate a Virtual Environment**:
+   - **macOS/Linux**:
+	 ```bash
+	 python3 -m venv venv
+	 source venv/bin/activate
+	 ```
+   - **Windows**:
+	 ```bash
+	 python -m venv venv
+	 .\venv\Scripts\activate
+	 ```
 
-2️⃣ Create and Activate a Virtual Environment
+3. **Install Dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-macOS / Linux
+4. **Configure API Keys**:
+   Create a `.env` file in the root directory with:
+   ```toml
+   OPENAI_API_KEY="sk-..."
+   FRED_API_KEY="your_fred_api_key_here"
+   NEWS_API_KEY="your_newsapi_key_here"
+   ```
 
-python3 -m venv venv
-source venv/bin/activate
+5. **Set EDGAR User Agent**:
+   In `project_notebook.ipynb`, update the `set_identity` call:
+   ```python
+   set_identity("Your Name your.email@example.com")
+   ```
 
-Windows
-
-python -m venv venv
-.\venv\Scripts\activate
-
-3️⃣ Install Dependencies
-
-pip install -r requirements.txt
-
-4️⃣ Configure API Keys
-
-Create a .streamlit/secrets.toml file and add your keys:
-
-# .streamlit/secrets.toml
-OPENAI_API_KEY = "sk-..."
-FRED_API_KEY = "your_fred_api_key_here"
-
-5️⃣ Set Your EDGAR User Agent
-
-The SEC requires a descriptive user agent for API calls.
-Edit src/agents.py and update the set_identity call:
-
-set_identity("Your Name your.email@example.com")
-
-6️⃣ Launch the Application
-
-streamlit run app.py
-```
-
----
-
-🚀 Key Results & Features
-
-✅ Fully Autonomous Agent
-Plans and executes complex financial research tasks from a single stock ticker input.
-
-✅ Multi-Agent Workflow
-Implements a Researcher → Critic → Refiner pipeline using LangGraph for state management and self-improvement.
-
-✅ Persistent Memory
-Stores one-line insights for each stock and reuses them for contextual continuity.
-
-✅ Interactive Streamlit UI
-Shows real-time status updates and streams the final report word-by-word in an intuitive interface.
+6. **Run the Notebook**:
+   Launch Jupyter Notebook and open `project_notebook.ipynb`:
+   ```bash
+   jupyter notebook
+   ```
+   Execute cells sequentially to run the INTC demo or test other tickers.
 
 ---
 
-👥 Team Contributions (AAi-520)
+## Key Results & Features
 
-
----
-
-🤖 AI Assistance Disclosure
-
-This project follows academic integrity and responsible AI usage principles.
-AI tools, such as ChatGPT and GitHub Copilot, were utilized for:
-	•	✨ Code formatting and refactoring (PEP8 compliance)
-	•	🧾 Commenting and documentation (including this README)
-	•	🪲 Debugging guidance and optimization suggestions
-
-All AI-generated content was reviewed, validated, and refined by the team to ensure full understanding and technical accuracy.
+- **✅ Autonomous Agent**: Plans and executes financial research from a single ticker input.
+- **✅ Multi-Agent Workflow**: Implements Planner → Executor → Critic → Refiner pipeline using LangGraph.
+- **✅ Persistent Memory**: Stores insights in `memory.json` for contextual continuity.
+- **✅ Comprehensive Analysis**: Integrates stock data, news, filings, and economic indicators into a polished report (e.g., INTC analysis balancing AI growth with risks).
 
 ---
 
-📚 License
+## Team Contributions (AAI-520)
 
-This project is distributed for educational and research purposes.
-Please include proper attribution if reusing or extending this work.
+- **Jagadeesh Kumar Sellappan** 
+- **Saurav Kumar Subudhi** 
+
+---
+
+## AI Assistance Disclosure
+
+This project adheres to academic integrity principles. AI tools (ChatGPT, GitHub Copilot) were used for:
+- ✨ Code formatting (PEP 8 compliance).
+- 🧾 Commenting and documentation (e.g., notebook markdowns, README).
+- 🪲 Debugging guidance and optimization suggestions.
+
+All AI-generated content was reviewed, validated, and refined by the team to ensure technical accuracy and alignment with course goals.
+
+---
+
+## License
+
+This project is for educational purposes. Please include proper attribution if reusing or extending this work.
+
+---
+## Streamlit Version
+
+For details on running the Streamlit version, see README_streamlit.md.
