@@ -1,0 +1,13 @@
+streamlit
+yfinance
+pandas
+openai
+langchain
+langchain-openai
+langchain-core
+langgraph
+langchain_community
+fredapi
+sec-edgar-api
+edgartools
+pytrends
